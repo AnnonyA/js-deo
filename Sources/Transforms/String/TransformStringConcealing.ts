@@ -8,7 +8,7 @@ import type { NodePath } from "@babel/traverse";
  * @remarks
  * Unsafe.
  */
-function restoreVariableDeclaratorInit(isNotEstimate: boolean, path: NodePath<t.VariableDeclarator>) {
+function restoreVariableDeclaratorInit(path: NodePath<t.VariableDeclarator>) {
     const { node } = path;
 
     if (node.init)
@@ -35,8 +35,8 @@ function restoreVariableDeclaratorInit(isNotEstimate: boolean, path: NodePath<t.
 
             path.get("init").replaceWith(innerNode.right);
 
-            if (isNotEstimate) // We don't need redundant assignment anymore
-                innerPath.remove();
+            // We don't need redundant assignment anymore
+            innerPath.remove();
 
             innerPath.stop();
         },
@@ -228,7 +228,9 @@ export default {
                     if (!stringArrayNameBindingPath.isVariableDeclarator())
                         return;
 
-                    restoreVariableDeclaratorInit(isNotEstimate, stringArrayNameBindingPath);
+                    // The function is actually changing the value of path, but even in estimate mode, it's safe to be changed
+                    // TODO: we should do this for cache object too
+                    restoreVariableDeclaratorInit(stringArrayNameBindingPath);
 
                     const { node: stringArrayNameBindingNode } = stringArrayNameBindingPath;
 
