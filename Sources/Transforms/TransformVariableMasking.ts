@@ -103,7 +103,7 @@ export default {
                                     innerPathParentPath.isAssignmentExpression() &&
                                     innerPathParentPath.get("left") === innerPath;
 
-                                const isLengthWritePropertyKeyName =
+                                const isLengthWritePropertyKey =
                                     (name: string) =>
                                         skipNested /* Length write statement only appear on target function */ &&
                                         isWrite &&
@@ -115,7 +115,7 @@ export default {
                                     if (t.isStringLiteral(innerProperty)) {
                                         argumentsMemberKey = innerProperty.value;
 
-                                        if (isLengthWritePropertyKeyName(argumentsMemberKey)) {
+                                        if (isLengthWritePropertyKey(argumentsMemberKey)) {
                                             pathsToRemove.push(innerPathParentPath.parentPath);
 
                                             return;
@@ -125,7 +125,7 @@ export default {
                                     else
                                         return;
                                 else if (t.isIdentifier(innerProperty)) {
-                                    if (isLengthWritePropertyKeyName(innerProperty.name)) {
+                                    if (isLengthWritePropertyKey(innerProperty.name)) {
                                         pathsToRemove.push(innerPathParentPath.parentPath);
 
                                         return;

@@ -1,6 +1,5 @@
 import { transformFunctionLengthSetterRemoval, type Transform } from "./Transform";
 import * as t from "@babel/types";
-import type { NodePath } from "@babel/traverse";
 
 const enum PseudoFlattenGetterType {
     GET,
@@ -82,39 +81,38 @@ export default {
                         const { path: bodySecondStatementArgumentCalleeNameBindingPath } = bodySecondStatementArgumentCalleeNameBinding,
                             { node: bodySecondStatementArgumentCalleeNameBindingNode } = bodySecondStatementArgumentCalleeNameBindingPath;
 
-                        const propertyToPseudoFlattenEntry: Map<string, PseudoFlattenEntry> = new Map();
+                        const keyToPseudoEntry: Map<string, PseudoFlattenEntry> = new Map;
 
                         bodyFirstStatementDeclarationInit.properties.forEach(property => {
                             if (!t.isObjectMethod(property)) return;
 
-                            let propertyKeyName: string;
+                            let propertyKey: string;
 
                             if (t.isStringLiteral(property.key))
-                                propertyKeyName = property.key.value;
+                                propertyKey = property.key.value;
                             else if (t.isIdentifier(property.key))
-                                propertyKeyName = property.key.name;
+                                propertyKey = property.key.name;
                             else
                                 return;
 
-                            const entry = propertyToPseudoFlattenEntry.get(propertyKeyName) || {};
+                            const propertyKeyPseudoEntry = keyToPseudoEntry.get(propertyKey) || {};
 
-                            const { body: { body: methodBody }, kind } = property;
+                            const { body: { body: propertyBody }, kind } = property;
 
-                            if (methodBody.length > 0) {
-                                const { 0: firstStatement } = methodBody;
+                            if (propertyBody.length > 0) {
+                                const { 0: firstStatement } = propertyBody;
 
                                 if (
                                     t.isReturnStatement(firstStatement) &&
                                     firstStatement.argument
                                 ) {
-
                                     if (isNotEstimate)
-                                        console.log("Entrying property:", propertyKeyName, "kind:", kind);
+                                        console.log("Entrying property:", propertyKey, "kind:", kind);
 
                                     const { argument: firstStatementArgument } = firstStatement;
 
                                     if (kind === "get")
-                                        entry.getter = {
+                                        propertyKeyPseudoEntry.getter = {
                                             type: PseudoFlattenGetterType.GET,
 
                                             expression: firstStatementArgument,
@@ -124,7 +122,7 @@ export default {
                                         t.isCallExpression(firstStatementArgument) &&
                                         t.isIdentifier(firstStatementArgument.callee)
                                     )
-                                        entry.getter = {
+                                        propertyKeyPseudoEntry.getter = {
                                             type: PseudoFlattenGetterType.PROXY,
 
                                             functionId: firstStatementArgument.callee,
@@ -134,12 +132,12 @@ export default {
                                         t.isExpressionStatement(firstStatement) &&
                                         t.isAssignmentExpression(firstStatement.expression)
                                     )
-                                        entry.setter = {
+                                        propertyKeyPseudoEntry.setter = {
                                             target: firstStatement.expression.left,
                                         };
                             }
 
-                            propertyToPseudoFlattenEntry.set(propertyKeyName, entry);
+                            keyToPseudoEntry.set(propertyKey, propertyKeyPseudoEntry);
                         });
 
                         const {
@@ -239,41 +237,42 @@ export default {
                                     else
                                         return;
 
-                                    const innerPropertyNamePseudoFlattenEntry = propertyToPseudoFlattenEntry.get(innerPropertyName);
-                                    if (!innerPropertyNamePseudoFlattenEntry)
+                                    const innerPropertyNamePseudoEntry = keyToPseudoEntry.get(innerPropertyName);
+                                    if (!innerPropertyNamePseudoEntry)
                                         return;
 
                                     const isAssignmentTarget =
                                         t.isAssignmentExpression(innerParent) &&
-                                        innerParent.left === innerPath.node;
+                                        t.isNodesEquivalent(innerParent.left, innerPath.node);
 
                                     if (
                                         isAssignmentTarget &&
-                                        innerPropertyNamePseudoFlattenEntry.setter
+                                        innerPropertyNamePseudoEntry.setter
                                     ) {
-                                        innerPath.replaceWith(innerPropertyNamePseudoFlattenEntry.setter.target);
+                                        const { setter: { target: innerPropertyNamePseudoEntrySetterTarget } } =
+                                            innerPropertyNamePseudoEntry;
 
-                                        console.log("Replaced setter access:", innerPropertyName);
-                                    } else {
-                                        if (innerPropertyNamePseudoFlattenEntry.getter) {
-                                            const { getter: innerPropertyNamePseudoFlattenEntryGetter } =
-                                                innerPropertyNamePseudoFlattenEntry;
+                                        innerPath.replaceWith(innerPropertyNamePseudoEntrySetterTarget);
 
-                                            switch (innerPropertyNamePseudoFlattenEntryGetter.type) {
-                                                case PseudoFlattenGetterType.GET:
-                                                    innerPath.replaceWith(innerPropertyNamePseudoFlattenEntryGetter.expression);
+                                        console.log("Replaced set:", innerPropertyName);
+                                    } else if (innerPropertyNamePseudoEntry.getter) {
+                                        const { getter: innerPropertyNamePseudoEntryGetter } =
+                                            innerPropertyNamePseudoEntry;
 
-                                                    console.log("Replaced get getter:", innerPropertyName);
+                                        switch (innerPropertyNamePseudoEntryGetter.type) {
+                                            case PseudoFlattenGetterType.GET:
+                                                innerPath.replaceWith(innerPropertyNamePseudoEntryGetter.expression);
 
-                                                    break;
+                                                console.log("Replaced get getter:", innerPropertyName);
 
-                                                case PseudoFlattenGetterType.PROXY:
-                                                    innerPath.replaceWith(innerPropertyNamePseudoFlattenEntryGetter.functionId);
+                                                break;
 
-                                                    console.log("Replaced proxy getter:", innerPropertyName);
+                                            case PseudoFlattenGetterType.PROXY:
+                                                innerPath.replaceWith(innerPropertyNamePseudoEntryGetter.functionId);
 
-                                                    break;
-                                            }
+                                                console.log("Replaced proxy getter:", innerPropertyName);
+
+                                                break;
                                         }
                                     }
                                 },

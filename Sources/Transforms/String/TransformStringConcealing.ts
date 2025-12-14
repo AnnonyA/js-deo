@@ -1,22 +1,47 @@
 import type { Transform } from "../Transform";
 import * as t from "@babel/types";
-import { isUndefinedIdentifier } from "../TransformDuplicateLiteralsRemoval";
+import type { NodePath } from "@babel/traverse";
 
-const isStaticLiteral = (node: t.Node) => {
-    if (t.isStringLiteral(node) || t.isNumericLiteral(node) || t.isBooleanLiteral(node) || t.isNullLiteral(node))
-        return true;
+/**
+ * Restores init of VariableDeclarator.
+ * 
+ * @remarks
+ * Unsafe.
+ */
+function restoreVariableDeclaratorInit(isNotEstimate: boolean, path: NodePath<t.VariableDeclarator>) {
+    const { node } = path;
 
-    if (isUndefinedIdentifier(node))
-        return true;
+    if (node.init)
+        return;
 
-    if (t.isUnaryExpression(node, { operator: "void" }) || (t.isUnaryExpression(node) && isStaticLiteral(node.argument)))
-        return true;
+    const { id } = node;
 
-    if (t.isArrayExpression(node))
-        return node.elements.every(isStaticLiteral);
+    if (!t.isIdentifier(id))
+        return;
 
-    return false;
-};
+    const { name } = id;
+
+    const program = path.findParent(innerPath => innerPath.isProgram());
+
+    program.traverse({
+        AssignmentExpression(innerPath) {
+            const { node: innerNode } = innerPath;
+
+            if (!(
+                innerNode.operator === "=" &&
+                t.isIdentifier(innerNode.left, { name })
+            ))
+                return;
+
+            path.get("init").replaceWith(innerNode.right);
+
+            if (isNotEstimate) // We don't need redundant assignment anymore
+                innerPath.remove();
+
+            innerPath.stop();
+        },
+    });
+}
 
 export default {
     name: "StringConcealing",
@@ -198,11 +223,16 @@ export default {
                     if (!stringArrayNameBinding)
                         return;
 
-                    const { path: stringArrayNameBindingPath } = stringArrayNameBinding,
-                        { node: stringArrayNameBindingNode } = stringArrayNameBindingPath;
+                    const { path: stringArrayNameBindingPath } = stringArrayNameBinding;
+
+                    if (!stringArrayNameBindingPath.isVariableDeclarator())
+                        return;
+
+                    restoreVariableDeclaratorInit(isNotEstimate, stringArrayNameBindingPath);
+
+                    const { node: stringArrayNameBindingNode } = stringArrayNameBindingPath;
 
                     if (!(
-                        t.isVariableDeclarator(stringArrayNameBindingNode) &&
                         stringArrayNameBindingNode.init &&
                         t.isArrayExpression(stringArrayNameBindingNode.init) &&
                         stringArrayNameBindingNode.init.elements.length > 0 &&
@@ -232,6 +262,7 @@ export default {
                     const { body: { body: decodeFunctionNameBindingNodeBody } } = decodeFunctionNameBindingNode;
 
                     const { 0: decodeFunctionNameBindingNodeBodyFirstStatement } = decodeFunctionNameBindingNodeBody;
+
                     if (!(
                         t.isVariableDeclaration(decodeFunctionNameBindingNodeBodyFirstStatement) &&
                         decodeFunctionNameBindingNodeBodyFirstStatement.declarations.length > 0 &&

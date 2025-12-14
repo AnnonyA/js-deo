@@ -39,7 +39,7 @@ export default {
 
                                 scramblerFunctionName = id.name;
 
-                                if (isNotEstimate) // We don't need scrambler function
+                                if (isNotEstimate) // We don't need scrambler function anymore
                                     innerPath.remove();
 
                                 innerPath.stop();

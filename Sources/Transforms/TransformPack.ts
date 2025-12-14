@@ -8,11 +8,24 @@ function truncateString(string: string, n: number) {
         : string;
 }
 
+interface PackPseudoGlobalEntry {
+    getter?: {
+        expression: t.Expression;
+    };
+    setter?: {
+        target: t.AssignmentExpression["left"];
+    };
+}
+
 export default {
     name: "Pack",
     preRunWebcrack: false,
     postRunWebcrack: true,
     contextedVisitor: context => {
+        let pseudoGlobalEntriesObjectName: string;
+
+        const keyToPseudoGlobalEntry: Map<string, PackPseudoGlobalEntry> = new Map;
+
         return {
             on: isEstimate => {
                 const isNotEstimate = !isEstimate;
@@ -21,6 +34,7 @@ export default {
                     Program(path) {
                         const { node: { body } } = path;
 
+                        // Considering imports, get last statement
                         const lastStatement = body[body.length - 1];
 
                         if (
@@ -31,23 +45,88 @@ export default {
                             lastStatement.expression.arguments.length === 1 &&
                             lastStatement.expression.callee.arguments.length === 2
                         ) {
-                            const { expression: { callee: { arguments: lastCallStatementCalleeArguments } } } = lastStatement;
+                            const {
+                                expression: {
+                                    callee: { arguments: lastStatementCalleeArguments },
+                                    arguments: lastStatementArguments,
+                                },
+                            } = lastStatement;
 
-                            const { 1: lastCallStatementCalleeArgumentsLast } = lastCallStatementCalleeArguments;
+                            const {
+                                0: lastStatementCalleeArgumentsFirst,
+                                1: lastStatementCalleeArgumentsLast,
+                            } = lastStatementCalleeArguments;
 
-                            if (t.isStringLiteral(lastCallStatementCalleeArgumentsLast))
+                            const { 0: lastStatementArgumentsLast } = lastStatementArguments;
+
+                            if (
+                                t.isStringLiteral(lastStatementCalleeArgumentsFirst) &&
+                                t.isStringLiteral(lastStatementCalleeArgumentsLast) &&
+                                t.isObjectExpression(lastStatementArgumentsLast)
+                            )
                                 if (isNotEstimate) {
-                                    const { value: lastCallStatementCalleeArgumentsLastValue } =
-                                        lastCallStatementCalleeArgumentsLast;
+                                    { // Setup final values
+                                        pseudoGlobalEntriesObjectName = lastStatementCalleeArgumentsFirst.value;
 
-                                    // Wrap in IIFE, since may lastCallStatementCalleeArgumentsLastValue has return
-                                    const { program: lastCallStatementCalleeArgumentsLastValueParsedProgram } =
-                                        parser.parse(`(function () { ${lastCallStatementCalleeArgumentsLastValue} })();`);
+                                        console.log("Psuedo global entries object name:", pseudoGlobalEntriesObjectName);
 
-                                    path.replaceWith(lastCallStatementCalleeArgumentsLastValueParsedProgram);
+                                        lastStatementArgumentsLast.properties.forEach(property => {
+                                            if (!t.isObjectMethod(property)) return;
+
+                                            let propertyKey: string;
+
+                                            if (t.isStringLiteral(property.key))
+                                                propertyKey = property.key.value;
+                                            else if (t.isIdentifier(property.key))
+                                                propertyKey = property.key.name;
+                                            else
+                                                return;
+
+                                            const entry = keyToPseudoGlobalEntry.get(propertyKey) || {};
+
+                                            const { body: { body: propertyBody }, kind } = property;
+
+                                            if (propertyBody.length > 0) {
+                                                const { 0: firstStatement } = propertyBody;
+
+                                                if (
+                                                    t.isReturnStatement(firstStatement) &&
+                                                    firstStatement.argument
+                                                ) {
+                                                    if (isNotEstimate)
+                                                        console.log("Entrying property:", propertyKey, "kind:", kind);
+
+                                                    const { argument: firstStatementArgument } = firstStatement;
+
+                                                    if (kind === "get")
+                                                        entry.getter = {
+                                                            expression: firstStatementArgument,
+                                                        };
+                                                } else if (kind === "set")
+                                                    if (
+                                                        t.isExpressionStatement(firstStatement) &&
+                                                        t.isAssignmentExpression(firstStatement.expression)
+                                                    )
+                                                        entry.setter = {
+                                                            target: firstStatement.expression.left,
+                                                        };
+                                            }
+
+                                            keyToPseudoGlobalEntry.set(propertyKey, entry);
+                                        });
+                                    }
+
+                                    const { value: lastStatementCalleeArgumentsLastValue } =
+                                        lastStatementCalleeArgumentsLast;
+
+                                    // Wrap in IIFE, since may lastStatementCalleeArgumentsLastValue has return
+                                    const { program: lastStatementCalleeArgumentsLastValueParsedProgram } =
+                                        parser.parse(`(function () { ${lastStatementCalleeArgumentsLastValue} })();`);
+
+                                    path.replaceWith(lastStatementCalleeArgumentsLastValueParsedProgram);
 
                                     { // Log
-                                        console.log("Unpacked the program:", `"${truncateString(lastCallStatementCalleeArgumentsLastValue, 50)}"`);
+                                        console.log("Unpacked the program:", `"${truncateString(lastStatementCalleeArgumentsLastValue, 50)}"`);
                                     }
 
                                     context.targetCount--;
@@ -61,7 +140,70 @@ export default {
             post: null,
 
             first: null,
-            final: null,
+            final: isEstimate => {
+                const isNotEstimate = !isEstimate;
+
+                return {
+                    MemberExpression(path) {
+                        if (!pseudoGlobalEntriesObjectName)
+                            return;
+
+                        const {
+                            node: { object, property },
+                            parent,
+                        } = path;
+
+                        if (!t.isIdentifier(object, { name: pseudoGlobalEntriesObjectName }))
+                            return;
+
+                        let propertyName: string;
+
+                        if (t.isStringLiteral(property))
+                            propertyName = property.value;
+                        else if (t.isIdentifier(property))
+                            propertyName = property.name;
+                        else
+                            return;
+
+                        const propertyNamePseudoGlobalEntry = keyToPseudoGlobalEntry.get(propertyName);
+                        if (!propertyNamePseudoGlobalEntry)
+                            return;
+
+                        const isAssignmentTarget =
+                            t.isAssignmentExpression(parent) &&
+                            t.isNodesEquivalent(parent.left, path.node);
+
+                        if (
+                            isAssignmentTarget &&
+                            propertyNamePseudoGlobalEntry.setter
+                        ) {
+                            if (isNotEstimate) {
+                                const { setter: { target: propertyNamePseudoGlobalEntrySetterTarget } } =
+                                    propertyNamePseudoGlobalEntry;
+
+                                path.replaceWith(propertyNamePseudoGlobalEntrySetterTarget);
+
+                                console.log("Replaced set:", propertyName);
+
+                                context.targetCount--;
+                            } else
+                                context.targetCount++;
+                        } else if (propertyNamePseudoGlobalEntry.getter) {
+                            if (isNotEstimate) {
+                                const { getter: { expression: propertyNamePseudoGlobalEntryGetterExpression } } =
+                                    propertyNamePseudoGlobalEntry;
+
+                                path.replaceWith(propertyNamePseudoGlobalEntryGetterExpression);
+
+                                console.log("Replaced getter:", propertyName);
+
+                                context.targetCount--;
+                            } else
+                                context.targetCount++;
+                        }
+                    },
+                };
+            },
         };
     },
 } satisfies Transform;

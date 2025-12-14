@@ -64,9 +64,6 @@ export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = cont
                 parentPath,
             } = path;
 
-            if (node.id === null)
-                return;
-
             const { id: { name } } = node;
 
             if (!(
