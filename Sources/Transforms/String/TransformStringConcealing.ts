@@ -25,12 +25,25 @@ function restoreVariableDeclaratorInit(path: NodePath<t.VariableDeclarator>) {
 
     program.traverse({
         AssignmentExpression(innerPath) {
-            const { node: innerNode } = innerPath;
+            const { node: innerNode, scope: innerScope } = innerPath;
 
             if (!(
-                innerNode.operator === "=" &&
+                (
+                    innerNode.operator === "=" ||
+                    innerNode.operator === "||=" ||
+                    innerNode.operator === "??="
+                ) &&
                 t.isIdentifier(innerNode.left, { name })
             ))
+                return;
+
+            const innerNameBinding = innerScope.getBinding(name);
+            if (!innerNameBinding)
+                return;
+
+            const { path: { node: innerNameBindingNode } } = innerNameBinding;
+
+            if (!t.isNodesEquivalent(innerNameBindingNode, node)) // Check if variable binding is correct
                 return;
 
             path.get("init").replaceWith(innerNode.right);

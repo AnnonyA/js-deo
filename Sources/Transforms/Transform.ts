@@ -101,8 +101,6 @@ export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = cont
             if (isNotEstimate) {
                 const { scope: parentScope } = parentPath;
 
-
-
                 const parentNameBinding = parentScope.getBinding(name);
                 if (!parentNameBinding)
                     return;
@@ -142,9 +140,15 @@ export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = cont
     };
 };
 
-const webcrackAST = async (ast: parser.ParseResult<t.File>) => {
+const webcrackAST = async (ast: parser.ParseResult) => {
     const { code: generatedASTCode } = generate(ast);
-    const { code: webcrackedGeneratedASTCode } = await webcrack(generatedASTCode);
+
+    const { code: webcrackedGeneratedASTCode } = await webcrack(generatedASTCode, {
+        jsx: false,
+        unpack: false,
+    });
+
+    // TODO: progrss bar for webcrack
 
     ast.program = parser.parse(webcrackedGeneratedASTCode).program;
 };
@@ -155,20 +159,13 @@ const webcrackAST = async (ast: parser.ParseResult<t.File>) => {
  * @remarks
  * This changes caller's value.
  */
-export async function transform(ast: parser.ParseResult<t.File>) {
+export async function transform(ast: parser.ParseResult, verbose: boolean = true) {
     const visitorsExecutors: Array<() => Promise<void>> = new Array;
 
     const firstVisitors: Map<string, EstimableVisitor> = new Map;
     const finalVisitors: Map<string, EstimableVisitor> = new Map;
 
-    const singleProgressBar = new cliProgress.SingleBar({
-        format: "{bar} | {value}/{total} | {transformName}",
-        stream: process.stdout,
-        barCompleteChar: "\u2588",
-        barIncompleteChar: "\u2591",
-        hideCursor: true,
-        forceRedraw: true,
-    });
+    let singleProgressBar: cliProgress.SingleBar | null = null;
 
     const backingTransformContext: TransformContext = {
         targetCount: 0,
@@ -182,35 +179,55 @@ export async function transform(ast: parser.ParseResult<t.File>) {
         set(target, p, newValue, receiver) {
             target[p] = newValue;
 
-            if (isTransformRunning && p === "targetCount") {
+            if (verbose && isTransformRunning && p === "targetCount") {
                 const newValueNumbered: number = newValue;
 
                 const progress = initialTargetCount - newValueNumbered;
 
-                singleProgressBar.update(progress);
+                singleProgressBar?.update(progress);
             }
 
             return true;
         },
     });
 
-    const unpatchConsoleLog = (function () {
-        // Required for fuckin' position issue
-        console.clear();
+    let unpatchConsoleLog: () => void = null;
 
-        const originalLog = console.log;
+    if (verbose) {
+        singleProgressBar = new cliProgress.SingleBar({
+            format: "{bar} | {value}/{total} | {transformName}",
+            stream: process.stdout,
+            barCompleteChar: "\u2588",
+            barIncompleteChar: "\u2591",
+            hideCursor: true,
+            forceRedraw: true,
+        });
 
-        console.log = (...data: Array<any>) => {
-            readline.clearLine(process.stdout, 0);
-            readline.cursorTo(process.stdout, 0);
+        unpatchConsoleLog = (function () {
+            // Required for fuckin' position issue
+            console.clear();
 
-            originalLog(...data);
+            const originalLog = console.log;
 
-            singleProgressBar.render();
-        };
+            console.log = (...data: Array<any>) => {
+                readline.clearLine(process.stdout, 0);
+                readline.cursorTo(process.stdout, 0);
 
-        return () => console.log = originalLog;
-    })();
+                originalLog(...data);
+
+                singleProgressBar?.render();
+            };
+
+            return () => console.log = originalLog;
+        })();
+    } else
+        unpatchConsoleLog = (function () {
+            const originalLog = console.log;
+
+            console.log = () => { };
+
+            return () => console.log = originalLog;
+        })();
 
     /**
      * Estimated traverse.
@@ -228,16 +245,20 @@ export async function transform(ast: parser.ParseResult<t.File>) {
         // Estimate first
         traverseASTEstimate(visitor);
 
-        console.log(`Running transform: ${transformName}`);
+        if (verbose)
+            console.log(`Running transform: ${transformName}`);
 
         { // Run transform
-            console.group();
+            if (verbose)
+                console.group();
 
             initialTargetCount = transformContext.targetCount;
 
             if (initialTargetCount > 0) {
-                singleProgressBar.setTotal(initialTargetCount + 1);
-                singleProgressBar.update(0, { transformName });
+                if (verbose) {
+                    singleProgressBar?.setTotal(initialTargetCount + 1);
+                    singleProgressBar?.update(0, { transformName });
+                }
 
                 { // Run transform
                     isTransformRunning = true;
@@ -245,7 +266,8 @@ export async function transform(ast: parser.ParseResult<t.File>) {
                     traverse(ast, visitor(false));
 
                     // This makes progress bar more beautiful
-                    await new Promise(resolve => setTimeout(resolve, 50));
+                    if (verbose)
+                        await new Promise(resolve => setTimeout(resolve, 50));
 
                     // To at least show 10ms completed progress bar
                     transformContext.targetCount++;
@@ -253,19 +275,23 @@ export async function transform(ast: parser.ParseResult<t.File>) {
                     isTransformRunning = false;
                 }
             } else {
-                // Do these before, so console.log can show this properly
-                singleProgressBar.setTotal(1);
-                singleProgressBar.update(0, { transformName: `${transformName} (Skipped)` });
+                if (verbose) {
+                    // Do these before, so console.log can show this properly
+                    singleProgressBar?.setTotal(1);
+                    singleProgressBar?.update(0, { transformName: `${transformName} (Skipped)` });
 
-                console.log(`No targets found`);
+                    console.log("No targets found");
+                }
             }
 
-            console.groupEnd();
+            if (verbose)
+                console.groupEnd();
         }
     };
 
     try {
-        singleProgressBar.start(1, 0, { transformName: "Starting..." });
+        if (verbose)
+            singleProgressBar?.start(1, 0, { transformName: "Starting..." });
 
         for (const {
             name,
@@ -316,14 +342,17 @@ export async function transform(ast: parser.ParseResult<t.File>) {
         for (const [name, visitor] of finalVisitors) // Execute final visitors
             await traverseASTProgressed(visitor, `${name} (Final)`);
 
-        singleProgressBar.update(singleProgressBar.getTotal(), { transformName: "Completed" });
+        if (verbose)
+            singleProgressBar?.update(singleProgressBar.getTotal(), { transformName: "Completed" });
     } finally {
-        singleProgressBar.stop();
-
         unpatchConsoleLog();
 
-        // This makes next console.log position correct (removes progress bar)
-        readline.cursorTo(process.stdout, 0, process.stdout.rows - 1);
+        if (verbose) {
+            singleProgressBar?.stop();
+
+            // This makes next console.log position correct (removes progress bar)
+            readline.cursorTo(process.stdout, 0, process.stdout.rows - 1);
+        }
     }
 }
 

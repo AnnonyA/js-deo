@@ -149,6 +149,7 @@ export default {
                             return;
 
                         const {
+                            node,
                             node: { object, property },
                             parent,
                         } = path;
@@ -171,7 +172,7 @@ export default {
 
                         const isAssignmentTarget =
                             t.isAssignmentExpression(parent) &&
-                            t.isNodesEquivalent(parent.left, path.node);
+                            t.isNodesEquivalent(parent.left, node);
 
                         if (
                             isAssignmentTarget &&
@@ -183,7 +184,7 @@ export default {
 
                                 path.replaceWith(propertyNamePseudoGlobalEntrySetterTarget);
 
-                                console.log("Replaced set:", propertyName);
+                                console.log("Replaced setter access:", propertyName);
 
                                 context.targetCount--;
                             } else
@@ -195,7 +196,7 @@ export default {
 
                                 path.replaceWith(propertyNamePseudoGlobalEntryGetterExpression);
 
-                                console.log("Replaced getter:", propertyName);
+                                console.log("Replaced getter access:", propertyName);
 
                                 context.targetCount--;
                             } else

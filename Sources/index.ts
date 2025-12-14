@@ -4,10 +4,13 @@ import { readFileSync, writeFileSync } from "fs";
 import { webcrack } from "webcrack";
 import { transform } from "./Transforms/Transform";
 
-(async function () {    
+(async function () {
     const obfuscatedCode = readFileSync("input/obfuscated.js").toString();
 
-    const { code: webcrackedObfuscatedCode } = await webcrack(obfuscatedCode);
+    const { code: webcrackedObfuscatedCode } = await webcrack(obfuscatedCode, {
+        jsx: false,
+        unpack: false,
+    });
 
     const ast = parser.parse(webcrackedObfuscatedCode);
 

@@ -1,3 +1,4 @@
+import generate from "@babel/generator";
 import type { Transform } from "./Transform";
 import * as t from "@babel/types";
 
@@ -53,7 +54,7 @@ export default {
                                     if (pathBinding) {
                                         const { referencePaths: pathBindingReferencePaths } = pathBinding;
 
-                                        let haveBeenReversedLiteral = true;
+                                        let haveBeenReversedLiteral = false;
 
                                         pathBindingReferencePaths.forEach(({ parent: innerParent, parentPath: innerParentPath }) => {
                                             if (

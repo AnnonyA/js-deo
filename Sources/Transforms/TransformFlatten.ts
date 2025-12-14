@@ -221,6 +221,7 @@ export default {
                             bodyPath.traverse({
                                 MemberExpression(innerPath) {
                                     const {
+                                        node: innerNode,
                                         node: { object, property: innerProperty },
                                         parent: innerParent,
                                     } = innerPath;
@@ -243,7 +244,7 @@ export default {
 
                                     const isAssignmentTarget =
                                         t.isAssignmentExpression(innerParent) &&
-                                        t.isNodesEquivalent(innerParent.left, innerPath.node);
+                                        t.isNodesEquivalent(innerParent.left, innerNode);
 
                                     if (
                                         isAssignmentTarget &&
@@ -254,7 +255,7 @@ export default {
 
                                         innerPath.replaceWith(innerPropertyNamePseudoEntrySetterTarget);
 
-                                        console.log("Replaced set:", innerPropertyName);
+                                        console.log("Replaced setter access:", innerPropertyName);
                                     } else if (innerPropertyNamePseudoEntry.getter) {
                                         const { getter: innerPropertyNamePseudoEntryGetter } =
                                             innerPropertyNamePseudoEntry;
@@ -263,14 +264,14 @@ export default {
                                             case PseudoFlattenGetterType.GET:
                                                 innerPath.replaceWith(innerPropertyNamePseudoEntryGetter.expression);
 
-                                                console.log("Replaced get getter:", innerPropertyName);
+                                                console.log("Replaced GET getter access:", innerPropertyName);
 
                                                 break;
 
                                             case PseudoFlattenGetterType.PROXY:
                                                 innerPath.replaceWith(innerPropertyNamePseudoEntryGetter.functionId);
 
-                                                console.log("Replaced proxy getter:", innerPropertyName);
+                                                console.log("Replaced PROXY getter access:", innerPropertyName);
 
                                                 break;
                                         }
