@@ -149,20 +149,29 @@ export default {
                         id: { name },
                     } = node;
 
+                    const nameBinding = scope.getBinding(name);
+                    if (!nameBinding)
+                        return;
+
                     let { params: { length: paramsLength } } = node;
 
                     if (paramsLength === 0)
                         return;
 
-                    if (!isConstantHolderAssignmentPatternParam(params[paramsLength - 1])) // Last parameter is ignorable
-                        paramsLength--;
+                    let argumentsParam: t.Identifier;
 
-                    const nameBinding = scope.getBinding(name);
-                    if (!nameBinding)
-                        return;
+                    { // Determine arguments parameter
+                        const lastParam = params[paramsLength - 1];
+
+                        if (t.isIdentifier(lastParam)) { // Last parameter is argument
+                            argumentsParam = lastParam;
+
+                            paramsLength--;
+                        }
+                    }
 
                     const flowPositionParams = params.slice(0, paramsLength - 1);
-                    const lastParam = params[paramsLength - 1];
+                    const constantHolderParam = params[paramsLength - 1];
 
                     const { referencePaths } = nameBinding;
 
@@ -179,51 +188,56 @@ export default {
 
                     if (!(
                         flowPositionParams.every(t.isIdentifier) &&
-                        isConstantHolderAssignmentPatternParam(lastParam)
+                        isConstantHolderAssignmentPatternParam(constantHolderParam)
                     ))
                         return;
 
-                    const resultDeclaration = cffStartFunction.findParent(({ node }) => t.isVariableDeclaration(node));
+                    const resultVariableDeclaration = cffStartFunction.findParent(({ node }) => t.isVariableDeclaration(node));
+
+                    let cffShouldReturnValueDeclarationName: string;
+
+                    if (
+                        resultVariableDeclaration &&
+                        resultVariableDeclaration.isVariableDeclaration()
+                    ) {
+                        const { parent: resultVariableDeclarationParent } = resultVariableDeclaration;
+
+                        if (!t.isBlock(resultVariableDeclarationParent))
+                            return;
+
+                        const { body: resultVariableDeclarationParentBody } =
+                            resultVariableDeclarationParent;
+
+                        const cffShouldReturnValueVariableDeclarationPosition =
+                            resultVariableDeclarationParentBody.indexOf(resultVariableDeclaration.node) - 1;
+                        if (0 > cffShouldReturnValueVariableDeclarationPosition)
+                            return;
+
+                        const cffShouldReturnValueVariableDeclaration = resultVariableDeclarationParentBody[cffShouldReturnValueVariableDeclarationPosition];
+
+                        if (!(
+                            t.isVariableDeclaration(cffShouldReturnValueVariableDeclaration) &&
+                            cffShouldReturnValueVariableDeclaration.declarations.length === 1 &&
+                            t.isIdentifier(cffShouldReturnValueVariableDeclaration.declarations[0].id)
+                        ))
+                            return;
+
+                        const { id: { name: innerCffShouldReturnValueDeclarationName } } = cffShouldReturnValueVariableDeclaration.declarations[0];
+
+                        cffShouldReturnValueDeclarationName = innerCffShouldReturnValueDeclarationName;
+                    }
 
                     if (!(
-                        resultDeclaration &&
-                        t.isVariableDeclaration(resultDeclaration.node)
+                        constantHolderParam.right.properties.length === 1 &&
+                        t.isObjectProperty(constantHolderParam.right.properties[0]) &&
+                        t.isIdentifier(constantHolderParam.right.properties[0].key) &&
+                        t.isObjectExpression(constantHolderParam.right.properties[0].value)
                     ))
                         return;
 
-                    const { parent: resultDeclarationParent } = resultDeclaration as NodePath<t.VariableDeclaration>;
+                    const { left: { name: constantHolderName } } = constantHolderParam;
 
-                    if (!t.isBlock(resultDeclarationParent))
-                        return;
-
-                    const { body: resultDeclarationParentBody } = resultDeclarationParent;
-
-                    const cffShouldReturnValueDeclarationPosition = resultDeclarationParentBody.indexOf(resultDeclaration.node) - 1;
-                    if (0 > cffShouldReturnValueDeclarationPosition)
-                        return;
-
-                    const cffShouldReturnValueDeclaration = resultDeclarationParentBody[cffShouldReturnValueDeclarationPosition];
-
-                    if (!(
-                        t.isVariableDeclaration(cffShouldReturnValueDeclaration) &&
-                        cffShouldReturnValueDeclaration.declarations.length === 1 &&
-                        t.isIdentifier(cffShouldReturnValueDeclaration.declarations[0].id)
-                    ))
-                        return;
-
-                    const { id: { name: cffShouldReturnValueDeclarationName } } = cffShouldReturnValueDeclaration.declarations[0];
-
-                    const { left: { name: constantHolderName } } = lastParam;
-
-                    if (!(
-                        lastParam.right.properties.length === 1 &&
-                        t.isObjectProperty(lastParam.right.properties[0]) &&
-                        t.isIdentifier(lastParam.right.properties[0].key) &&
-                        t.isObjectExpression(lastParam.right.properties[0].value)
-                    ))
-                        return;
-
-                    const { key: { name: constantHolderInternalPropertyName } } = lastParam.right.properties[0];
+                    const { right: { properties: { 0: { key: { name: constantHolderInternalPropertyName } } } } } = constantHolderParam;
 
                     // We determined that the path is CFF function
 
@@ -666,7 +680,32 @@ export default {
                                         t.isCallExpression(returnStatementArgument.object.callee.object) &&
                                         t.isIdentifier(returnStatementArgument.object.callee.object.callee, { name })
                                     ) {
+                                        const { object: { callee: { object: { arguments: returnStatementArgumentObjectCalleeObjectArguments } } } } =
+                                            returnStatementArgument;
 
+                                        const innerFlowPositions: FlowPositions = {};
+
+                                        returnStatementArgumentObjectCalleeObjectArguments.forEach((argument, i) => {
+                                            if (isNumericLiteralOrMinusNumericUnaryExpression(argument))
+                                                innerFlowPositions[flowPositionParamNames[i]] =
+                                                    numericLiteralOrMinusNumericUnaryExpressionToValue(argument);
+                                        });
+
+                                        { // Do grouped reconstruction
+                                            console.group();
+
+                                            const reconstructedBody = reconstructBlock(
+                                                structuredClone(literalConstants),
+
+                                                innerFlowPositions,
+
+                                                defaultFlowWithContext,
+                                            );
+
+                                            console.log(generate(t.blockStatement(finalizeFlowStatements(reconstructedBody))).code);
+
+                                            console.groupEnd();
+                                        }
                                     }
                                 }
                             }
@@ -1118,8 +1157,11 @@ export default {
                                     numericLiteralOrMinusNumericUnaryExpressionToValue(argument);
                         });
 
+                        const { node: blockParentNode } =
+                            path.findParent(path => path.isBlock()) as NodePath<t.Block>;
+
                         // Finally we can replace body
-                        resultDeclarationParent.body = reconstructBlock(
+                        blockParentNode.body = reconstructBlock(
                             literalConstants,
 
                             flowPositions,
