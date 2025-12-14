@@ -19,8 +19,8 @@ interface PackPseudoGlobalEntry {
 
 export default {
     name: "Pack",
-    preRunWebcrack: false,
-    postRunWebcrack: true,
+    preRunWebcrack: true, // First webcrack
+    postRunWebcrack: true, // Simplify unpacked program
     contextedVisitor: context => {
         let pseudoGlobalEntriesObjectName: string;
 

@@ -22,6 +22,6 @@
         "eslint.config.mjs",
         "Sources/**/*",
         "input/**/*",
-        "output/**/*",
+        "output/**/*", "Test/combination.ts",
     ]
 }

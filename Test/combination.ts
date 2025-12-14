@@ -1,8 +1,7 @@
 import * as parser from "@babel/parser";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
-import { webcrack } from "webcrack";
-import { transform } from "./Transforms/Transform";
+import { transform } from "../Sources/Transforms/Transform";
 import { obfuscateAST } from "js-confuser";
 import type { ObfuscateOptions } from "js-confuser";
 import * as fs from "fs/promises";

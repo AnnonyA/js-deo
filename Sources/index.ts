@@ -7,12 +7,7 @@ import { transform } from "./Transforms/Transform";
 (async function () {
     const obfuscatedCode = readFileSync("input/obfuscated.js").toString();
 
-    const { code: webcrackedObfuscatedCode } = await webcrack(obfuscatedCode, {
-        jsx: false,
-        unpack: false,
-    });
-
-    const ast = parser.parse(webcrackedObfuscatedCode);
+    const ast = parser.parse(obfuscatedCode);
 
     await transform(ast);
 
@@ -20,7 +15,7 @@ import { transform } from "./Transforms/Transform";
 
     const { code: generatedAstCode } = generate(ast);
 
-    // This will simplifies plugin "preparation"
+    // This will simplifies overall transformation result
     // https://github.com/MichaelXF/js-confuser/blob/master/src/transforms/preparation.ts
     const { code: webcrackedDefobfuscatedCode } = await webcrack(generatedAstCode);
 
