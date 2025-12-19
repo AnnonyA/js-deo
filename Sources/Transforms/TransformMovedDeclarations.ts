@@ -92,6 +92,44 @@ export default {
                         const { params } = node;
 
                         params.forEach(param => {
+                            /*
+                                Simplifying the default paramter is irreversible
+                            
+                                ```js
+                                function greet(name) {
+                                  var c = 1;
+                                  var output = 'Hello ' + name + c + '!';
+                                  console.log(output);
+                                  function breet(name) {
+                                    var output = 'Hello ' + name + '!';
+                                    console.log(output);
+                                  }
+                                  breet(output);
+                                }
+                            
+                                greet('Internet User');
+                                ```
+                            
+                                to
+                            
+                                ```js
+                                function greet(name, c = 1, output, breet) {
+                                  if (!breet) {
+                                    breet = function (name, output) {
+                                      output = "Hello " + name + "!";
+                                      console.log(output);
+                                    };
+                                  }
+                                  output = "Hello " + name + c + "!";
+                                  console.log(output);
+                                  breet(output);
+                                }
+                                greet("Internet User");
+                            ```
+
+                            If we have default parameter after deleted parameters, we can simplify it, but it's not true
+                            */
+
                             if (!t.isIdentifier(param))
                                 return;
 
