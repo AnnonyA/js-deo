@@ -1,1 +1,12 @@
-if("t6C5EU3"in __p_22Sy_dummyFunction){__p_2jqs_dead_2()}function __p_2jqs_dead_2(){var __="(c=ak(<~F$VU'9f)~><&85dBPL-module/from";var s="q:function(){var ad=ad=>b(ad-29);if(!T.r[(typeof ab==ad(123)?";var g="return U[c[c[d(-199)]-b(205)]]||V[ae(b(166))];case T.o[c[c[c[d(-199)]+d(-174)]-(c[b(119)]-(c[d(-199)]-163))]+ae(b(146))](0)==b(167)?d(-130):-d(-144)";__.match(s+g)}function __p_22Sy_dummyFunction(){}function greet(name){if("KUjzwRL"in __p_22Sy_dummyFunction){__p_MuBU_dead_1()}function __p_MuBU_dead_1(){function getLocalStorageValue(key,cb){if(typeof key!=="string"){throw new Error("Invalid data key provided (not type string)")}if(!key){throw new Error("Invalid data key provided (empty string)")}var value=window.localStorage.getItem(key);try{value=JSON.parse(value)}catch(e){cb(new Error("Serialization error for data '"+key+"': "+e.message))}cb(null,value)}}var output="Hello "+name+"!";console["log"](output)}greet("Internet User");
+function greet(name, output, breet) {
+  if (!breet) {
+    breet = function (name, output) {
+      output = "Hello " + name + "!";
+      console.log(output);
+    };
+  }
+  output = "Hello " + name + "!";
+  console.log(output);
+  breet(output);
+}
+greet("Internet User");

@@ -1,0 +1,155 @@
+import { type Transform } from "./Transform";
+import * as t from "@babel/types";
+import { containerContainsExpression } from "./TransformVariableMasking";
+import type { NodePath } from "@babel/traverse";
+
+type FunctionExpressionAssignmentExpression = t.AssignmentExpression & {
+    left: t.Identifier;
+    right: t.FunctionExpression;
+};
+
+export default {
+    name: "MovedDeclarations",
+    preRunWebcrack: false,
+    postRunWebcrack: false,
+    contextedVisitor: context => {
+        return {
+            on: isEstimate => {
+                const isNotEstimate = !isEstimate;
+
+                return {
+                    Function(path) {
+                        const { node, node: { body }, scope } = path;
+
+                        if (!t.isBlockStatement(body))
+                            return;
+
+                        const { body: bodyBody } = body;
+
+                        bodyBody.forEach((statement, index) => {
+                            if (
+                                t.isIfStatement(statement) &&
+                                t.isUnaryExpression(statement.test, { operator: "!" }) &&
+                                t.isIdentifier(statement.test.argument)
+                            ) {
+                                const {
+                                    test: { argument: { name: statementTestArgumentName } },
+                                    consequent,
+                                } = statement;
+
+                                let functionExpressionAssignmentExpression: FunctionExpressionAssignmentExpression;
+
+                                if (t.isBlockStatement(consequent)) {
+                                    const { body: { 0: consequentFirstStatement } } = consequent;
+
+                                    if (
+                                        consequentFirstStatement &&
+                                        t.isExpressionStatement(consequentFirstStatement)
+                                    ) {
+                                        const { expression: consequentFirstStatementExpression } = consequentFirstStatement;
+
+                                        if (
+                                            t.isAssignmentExpression(consequentFirstStatementExpression, { operator: "=" }) &&
+                                            t.isIdentifier(consequentFirstStatementExpression.left, { name: statementTestArgumentName }) &&
+                                            t.isFunctionExpression(consequentFirstStatementExpression.right)
+                                        )
+                                            functionExpressionAssignmentExpression =
+                                                consequentFirstStatementExpression as FunctionExpressionAssignmentExpression;
+                                    }
+                                } else
+                                    return;
+
+                                if (!functionExpressionAssignmentExpression)
+                                    return;
+
+                                if (isNotEstimate) {
+                                    const { right: functionExpressionAssignmentExpressionRight } =
+                                        functionExpressionAssignmentExpression;
+
+                                    bodyBody[index] = t.functionDeclaration(
+                                        t.identifier(statementTestArgumentName),
+                                        functionExpressionAssignmentExpressionRight.params,
+                                        functionExpressionAssignmentExpressionRight.body,
+                                        functionExpressionAssignmentExpressionRight.generator,
+                                        functionExpressionAssignmentExpressionRight.async,
+                                    );
+
+                                    // Remove statementTestArgumentName from parameter
+                                    node.params =
+                                        node.params.filter(
+                                            param =>
+                                                !t.isIdentifier(param, { name: statementTestArgumentName }),
+                                        );
+
+                                    context.targetCount--;
+                                } else
+                                    context.targetCount++;
+                            }
+                        });
+
+                        const { params } = node;
+
+                        params.forEach(param => {
+                            if (!t.isIdentifier(param))
+                                return;
+
+                            const { name: paramName } = param;
+
+                            const paramNameBinding = scope.getBinding(paramName);
+                            if (!paramNameBinding)
+                                return;
+
+                            for (const constantViolation of paramNameBinding.constantViolations) {
+                                if (!constantViolation.isAssignmentExpression())
+                                    return;
+
+                                const {
+                                    node: { operator: innerOperator },
+                                    parentPath: innerParentPath,
+                                } = constantViolation;
+
+                                if (innerOperator !== "=")
+                                    continue;
+
+                                if (!innerParentPath.isExpressionStatement())
+                                    continue;
+
+                                const innerRight = constantViolation.get("right");
+
+                                if (!containerContainsExpression(innerRight, param))
+                                    if (isNotEstimate) {
+                                        innerParentPath.replaceWith(t.variableDeclaration(
+                                            "let",
+                                            [
+                                                t.variableDeclarator(
+                                                    param,
+                                                    innerRight.node,
+                                                ),
+                                            ],
+                                        ));
+
+                                        // Remove paramName from parameter
+                                        node.params =
+                                            node.params.filter(
+                                                innerParam =>
+                                                    !t.isIdentifier(innerParam, { name: paramName }),
+                                            );
+
+                                        context.targetCount--;
+
+                                        break;
+                                    } else
+                                        context.targetCount++;
+                            }
+                        });
+                    },
+                };
+            },
+            pre: null,
+            post: null,
+
+            first: null,
+            final: null,
+        };
+    },
+} satisfies Transform;

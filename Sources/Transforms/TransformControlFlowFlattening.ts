@@ -335,13 +335,13 @@ export default {
                                 if (indexOfInnerNode === -1)
                                     return;
 
-                                left.elements.forEach((element, i) => {
+                                left.elements.forEach((element, index) => {
                                     if (t.isLVal(element))
                                         parent.consequent.splice(indexOfInnerNode, 0, t.expressionStatement(
                                             t.assignmentExpression(
                                                 expression.operator,
                                                 element,
-                                                right.elements[i] as t.Expression, // right.elements not including spread
+                                                right.elements[index] as t.Expression, // right.elements not including spread
                                             ),
                                         ));
                                 });
@@ -379,13 +379,13 @@ export default {
                                 removeStatementFromStatements(statement);
                         });
 
-                        statements.forEach((statement, i) => {
+                        statements.forEach((statement, index) => {
                             if (
                                 t.isReturnStatement(statement) &&
                                 statement.argument
                             ) {
                                 const cffShouldReturnValueDeclarationTrueAssignment =
-                                    statements.slice(0, i)
+                                    statements.slice(0, index)
                                         .find(node => (
                                             t.isExpressionStatement(node) &&
                                             t.isAssignmentExpression(node.expression) &&
@@ -397,7 +397,7 @@ export default {
                                 if (cffShouldReturnValueDeclarationTrueAssignment)
                                     removeStatementFromStatements(cffShouldReturnValueDeclarationTrueAssignment);
                                 else
-                                    statements[i] = t.expressionStatement(statement.argument);
+                                    statements[index] = t.expressionStatement(statement.argument);
                             }
                         });
 
@@ -685,9 +685,9 @@ export default {
 
                                         const innerFlowPositions: FlowPositions = {};
 
-                                        returnStatementArgumentObjectCalleeObjectArguments.forEach((argument, i) => {
+                                        returnStatementArgumentObjectCalleeObjectArguments.forEach((argument, index) => {
                                             if (isNumericLiteralOrMinusNumericUnaryExpression(argument))
-                                                innerFlowPositions[flowPositionParamNames[i]] =
+                                                innerFlowPositions[flowPositionParamNames[index]] =
                                                     numericLiteralOrMinusNumericUnaryExpressionToValue(argument);
                                         });
 
@@ -1151,9 +1151,9 @@ export default {
 
                         const { arguments: cffStartCallArguments } = cffStartCall;
 
-                        cffStartCallArguments.forEach((argument, i) => {
+                        cffStartCallArguments.forEach((argument, index) => {
                             if (isNumericLiteralOrMinusNumericUnaryExpression(argument))
-                                flowPositions[flowPositionParamNames[i]] =
+                                flowPositions[flowPositionParamNames[index]] =
                                     numericLiteralOrMinusNumericUnaryExpressionToValue(argument);
                         });
 

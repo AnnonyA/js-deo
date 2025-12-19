@@ -9,6 +9,7 @@ import * as readline from "readline";
 
 import transformPack from "./TransformPack";
 import transformASTScrambler from "./TransformASTScrambler";
+import transformMovedDeclarations  from "./TransformMovedDeclarations";
 import transformControlFlowFlattening from "./TransformControlFlowFlattening";
 import transformShuffle from "./TransformShuffle";
 import transformDuplicateLiteralsRemoval from "./TransformDuplicateLiteralsRemoval";
@@ -36,6 +37,7 @@ import transformPreparation from "./TransformPreparation";
 export const ALL_TRANSFORMS: ReadonlyArray<Transform> = [
     transformPack,
     transformASTScrambler,
+    transformMovedDeclarations,
     transformControlFlowFlattening,
     transformShuffle,
     transformDuplicateLiteralsRemoval,

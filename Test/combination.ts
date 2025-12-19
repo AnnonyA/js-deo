@@ -13,7 +13,7 @@ async function iterateBooleanOptionsCombinations(
 ) {
     const totalCombinations = Math.pow(2, keys.length);
 
-    const indices = Array.from({ length: totalCombinations }, (_, i) => i);
+    const indices = Array.from({ length: totalCombinations }, (_, index) => index);
 
     for (let i = indices.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
