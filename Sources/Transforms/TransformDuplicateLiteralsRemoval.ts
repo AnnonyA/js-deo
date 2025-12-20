@@ -25,7 +25,7 @@ export default {
     postRunWebcrack: true,
     contextedVisitor: context => {
         return {
-            on: isEstimate => {
+            on(isEstimate) {
                 const isNotEstimate = !isEstimate;
 
                 return {

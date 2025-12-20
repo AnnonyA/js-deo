@@ -7,7 +7,7 @@ export default {
     postRunWebcrack: true, // We transform minify with this
     contextedVisitor: context => {
         return {
-            on: isEstimate => {
+            on(isEstimate) {
                 const isNotEstimate = !isEstimate;
 
                 return {
@@ -16,28 +16,28 @@ export default {
 
                         path.traverse({
                             FunctionDeclaration(innerPath) {
-                                const { node: { id, body: { body } } } = innerPath;
+                                const { node: { id: innerId, body: { body: innerBody } } } = innerPath;
 
-                                if (body.length !== 1)
+                                if (innerBody.length !== 1)
                                     return;
 
-                                const { 0: bodyFirstStatement } = body;
+                                const { 0: innerBodyFirstStatement } = innerBody;
 
                                 if (!(
-                                    t.isExpressionStatement(bodyFirstStatement) &&
-                                    t.isAssignmentExpression(bodyFirstStatement.expression)
+                                    t.isExpressionStatement(innerBodyFirstStatement) &&
+                                    t.isAssignmentExpression(innerBodyFirstStatement.expression)
                                 ))
                                     return;
 
-                                const { expression: bodyFirstStatementExpression } = bodyFirstStatement;
+                                const { expression: innerBodyFirstStatementExpression } = innerBodyFirstStatement;
 
                                 if (!(
-                                    t.isIdentifier(bodyFirstStatementExpression.left, { name: id.name }) &&
-                                    t.isFunctionExpression(bodyFirstStatementExpression.right)
+                                    t.isIdentifier(innerBodyFirstStatementExpression.left, { name: innerId.name }) &&
+                                    t.isFunctionExpression(innerBodyFirstStatementExpression.right)
                                 ))
                                     return;
 
-                                scramblerFunctionName = id.name;
+                                scramblerFunctionName = innerId.name;
 
                                 if (isNotEstimate) // We don't need scrambler function anymore
                                     innerPath.remove();
@@ -54,16 +54,16 @@ export default {
 
                         path.traverse({
                             ExpressionStatement(innerPath) {
-                                const { node: { expression } } = innerPath;
+                                const { node: { expression: innerExpression } } = innerPath;
 
                                 if (!(
-                                    t.isCallExpression(expression) &&
-                                    t.isIdentifier(expression.callee, { name: scramblerFunctionName })
+                                    t.isCallExpression(innerExpression) &&
+                                    t.isIdentifier(innerExpression.callee, { name: scramblerFunctionName })
                                 ))
                                     return;
 
                                 if (isNotEstimate) {
-                                    const { arguments: ownArguments } = expression;
+                                    const { arguments: ownArguments } = innerExpression;
 
                                     const argumentsFlattened =
                                         ownArguments.map(argument => t.expressionStatement(argument as t.Expression));

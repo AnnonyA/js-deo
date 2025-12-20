@@ -61,7 +61,7 @@ export default {
     preRunWebcrack: false,
     postRunWebcrack: true, // Simplify StringSplitting
     contextedVisitor: context => ({
-        on: isEstimate => {
+        on(isEstimate) {
             const isNotEstimate = !isEstimate;
 
             const decodedCache = new Map<number, string>;

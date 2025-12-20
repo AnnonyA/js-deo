@@ -42,7 +42,7 @@ export default {
         let unshuffleFunctionDeclarationPath: NodePath<t.FunctionDeclaration>;
 
         return {
-            on: isEstimate => {
+            on(isEstimate) {
                 const isNotEstimate = !isEstimate;
 
                 return {
@@ -101,7 +101,7 @@ export default {
                 };
             },
             pre: null,
-            post: isEstimate => {
+            post(isEstimate) {
                 const isNotEstimate = !isEstimate;
 
                 return {

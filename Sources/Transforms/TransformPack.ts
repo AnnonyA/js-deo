@@ -27,7 +27,7 @@ export default {
         const keyToPseudoGlobalEntry = new Map<string, PackPseudoGlobalEntry>;
 
         return {
-            on: isEstimate => {
+            on(isEstimate) {
                 const isNotEstimate = !isEstimate;
 
                 return {
@@ -140,7 +140,7 @@ export default {
             post: null,
 
             first: null,
-            final: isEstimate => {
+            final(isEstimate) {
                 const isNotEstimate = !isEstimate;
 
                 return {
