@@ -23,21 +23,32 @@ export default {
                         t.isStringLiteral(ourArguments[0])
                     )
                         if (isNotEstimate) {
-                            const { value: pattern } = ourArguments[0],
+                            const { 0: { value: pattern } } = ourArguments,
                                 flags =
                                     ourArguments[1] && t.isStringLiteral(ourArguments[1])
                                         ? ourArguments[1].value
                                         : "";
 
-                            const regexLiteral = t.regExpLiteral(pattern, flags);
+                            try {
+                                const {
+                                    source: regExpSource,
+                                    flags: regExpFlags,
+                                } = new RegExp(pattern, flags);
 
-                            path.replaceWith(regexLiteral);
+                                const regExpLiteral = t.regExpLiteral(regExpSource, regExpFlags);
 
-                            { // Log
-                                const { code: nodeCode } = generate(node),
-                                    { code: regexLiteralCode } = generate(regexLiteral);
+                                path.replaceWith(regExpLiteral);
 
-                                console.log(`Simplified RegExp constructor: ${nodeCode} -> ${regexLiteralCode}`);
+                                { // Log
+                                    const { code: nodeCode } = generate(node),
+                                        { code: regExpLiteralCode } = generate(regExpLiteral);
+
+                                    console.log(`Simplified RegExp constructor: ${nodeCode} -> ${regExpLiteralCode}`);
+                                }
+                            } catch (e) {
+                                const { code: nodeCode } = generate(node);
+
+                                console.warn("Invalid RegExp, skipping:", nodeCode);
                             }
 
                             context.targetCount--;
