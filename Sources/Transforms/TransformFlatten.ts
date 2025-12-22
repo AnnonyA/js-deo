@@ -78,8 +78,10 @@ export default {
                         ))
                             return;
 
-                        const { path: bodySecondStatementArgumentCalleeNameBindingPath } = bodySecondStatementArgumentCalleeNameBinding,
-                            { node: bodySecondStatementArgumentCalleeNameBindingNode } = bodySecondStatementArgumentCalleeNameBindingPath;
+                        const {
+                            path: bodySecondStatementArgumentCalleeNameBindingPath,
+                            path: { node: bodySecondStatementArgumentCalleeNameBindingNode },
+                        } = bodySecondStatementArgumentCalleeNameBinding;
 
                         const keyToPseudoEntry = new Map<string, PseudoFlattenEntry>;
 

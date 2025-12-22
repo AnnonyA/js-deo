@@ -261,8 +261,10 @@ export default {
                     if (!decodeFunctionNameBinding)
                         return;
 
-                    const { path: decodeFunctionNameBindingPath } = decodeFunctionNameBinding,
-                        { node: decodeFunctionNameBindingNode } = decodeFunctionNameBindingPath;
+                    const {
+                        path: decodeFunctionNameBindingPath,
+                        path: { node: decodeFunctionNameBindingNode },
+                    } = decodeFunctionNameBinding;
 
                     if (!(
                         t.isFunctionDeclaration(decodeFunctionNameBindingNode) &&

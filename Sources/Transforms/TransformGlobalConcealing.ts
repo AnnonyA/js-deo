@@ -45,13 +45,13 @@ const isGlobalConcealingGetFunctionCase = (ourCase: t.SwitchCase): ourCase is t.
 } => {
     const { test, consequent } = ourCase;
 
-    return consequent.length === 1 &&
+    return t.isStringLiteral(test) &&
+        consequent.length === 1 &&
         t.isReturnStatement(consequent[0]) &&
         consequent[0].argument &&
         t.isMemberExpression(consequent[0].argument) &&
         t.isIdentifier(consequent[0].argument.object) &&
-        (t.isIdentifier(consequent[0].argument.property) || t.isStringLiteral(consequent[0].argument.property)) &&
-        t.isStringLiteral(test);
+        (t.isIdentifier(consequent[0].argument.property) || t.isStringLiteral(consequent[0].argument.property));
 };
 
 export default {
