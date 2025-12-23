@@ -62,8 +62,8 @@ export const transformPredicateFunctionDeclarationRemoval: SharedEstimableVisito
 
             if (isPredicateFunctionDeclaration(node))
                 if (isNotEstimate) {
-                    const binding = scope.getBinding(name);
-                    if (binding)
+                    const nameBinding = scope.getBinding(name);
+                    if (nameBinding)
                         path.remove();
 
                     console.log("Removed predicate function:", name);

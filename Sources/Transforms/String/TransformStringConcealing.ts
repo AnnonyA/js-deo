@@ -8,52 +8,52 @@ import type { NodePath } from "@babel/traverse";
  * @remarks
  * Unsafe.
  */
-function restoreVariableDeclaratorInit(path: NodePath<t.VariableDeclarator>) {
-    const { node } = path;
+export function restoreVariableDeclaratorInit(varaibleDeclaratorPath: NodePath<t.VariableDeclarator>):
+    varaibleDeclaratorPath is NodePath<t.VariableDeclarator & {
+        id: t.Identifier;
+        init: t.Node;
+    }> {
+    const { node, scope } = varaibleDeclaratorPath;
 
     if (node.init)
-        return;
+        return true;
 
     const { id } = node;
 
     if (!t.isIdentifier(id))
-        return;
+        return false;
 
     const { name } = id;
 
-    const program = path.findParent(innerPath => innerPath.isProgram());
+    const nameBinding = scope.getBinding(name);
+    if (!nameBinding)
+        return false;
 
-    program.traverse({
-        AssignmentExpression(innerPath) {
-            const { node: innerNode, scope: innerScope } = innerPath;
+    const { constantViolations: nameBindingConstantViolations } = nameBinding;
 
-            if (!(
-                (
-                    innerNode.operator === "=" ||
-                    innerNode.operator === "||=" ||
-                    innerNode.operator === "??="
-                ) &&
-                t.isIdentifier(innerNode.left, { name })
-            ))
-                return;
+    for (const constantViolation of nameBindingConstantViolations) {
+        if (!constantViolation.isAssignmentExpression())
+            continue;
 
-            const innerNameBinding = innerScope.getBinding(name);
-            if (!innerNameBinding)
-                return;
+        const { node: constantViolationNode } = constantViolation;
 
-            const { path: { node: innerNameBindingNode } } = innerNameBinding;
+        if (!(
+            constantViolationNode.operator === "=" ||
+            constantViolationNode.operator === "||=" ||
+            constantViolationNode.operator === "??="
+        ))
+            continue;
 
-            if (!t.isNodesEquivalent(innerNameBindingNode, node)) // Check if variable binding is correct
-                return;
+        varaibleDeclaratorPath.get("init")
+            .replaceWith(constantViolationNode.right);
 
-            path.get("init").replaceWith(innerNode.right);
+        // We don't need slow-assignment anymore
+        constantViolation.remove();
 
-            // We don't need redundant assignment anymore
-            innerPath.remove();
+        return true;
+    }
 
-            innerPath.stop();
-        },
-    });
+    return false;
 }
 
 export default {
@@ -94,6 +94,7 @@ export default {
                             body: { body },
                         },
                         scope,
+                        parentPath: { scope: parentScope },
                     } = path;
 
                     if (params.length !== 1)
@@ -243,19 +244,19 @@ export default {
 
                     // The function is actually changing the value of path, but even in estimate mode, it's safe to be changed
                     // TODO: we should do this for cache object too
-                    restoreVariableDeclaratorInit(stringArrayNameBindingPath);
+                    if (!restoreVariableDeclaratorInit(stringArrayNameBindingPath))
+                        return;
 
                     const { node: stringArrayNameBindingNode } = stringArrayNameBindingPath;
 
                     if (!(
-                        stringArrayNameBindingNode.init &&
                         t.isArrayExpression(stringArrayNameBindingNode.init) &&
                         stringArrayNameBindingNode.init.elements.length > 0 &&
                         stringArrayNameBindingNode.init.elements.every(t.isStringLiteral)
                     ))
                         return;
 
-                    const stringArray = stringArrayNameBindingNode.init.elements.map(element => element.value);
+                    const stringArrayValued = stringArrayNameBindingNode.init.elements.map(element => element.value);
 
                     const decodeFunctionNameBinding = scope.getBinding(decodeFunctionName);
                     if (!decodeFunctionNameBinding)
@@ -345,7 +346,7 @@ export default {
                             return indexCachedDecoded;
                         }
 
-                        const decoded = innerDecode(stringArray[index]);
+                        const decoded = innerDecode(stringArrayValued[index]);
 
                         console.log(`Index ${index} decoded: "${decoded}"`);
 
@@ -354,20 +355,22 @@ export default {
                         return decoded;
                     };
 
-                    const nameBinding = scope.getBinding(name);
-                    if (!nameBinding)
+                    const nameBindingParent = parentScope.getBinding(name);
+                    if (!nameBindingParent)
                         return;
 
-                    const { referencePaths: nameBindingReferencePaths } = nameBinding;
+                    const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
 
-                    nameBindingReferencePaths.forEach(({ parentPath: innerParentPath, parentPath: { node: innerParentNode } }) => {
+                    nameBindingParentReferencePaths.forEach(({ parentPath: innerParentPath, parentPath: { node: innerParentNode } }) => {
                         if (
                             t.isCallExpression(innerParentNode) &&
                             innerParentNode.arguments.length === 1 &&
                             t.isNumericLiteral(innerParentNode.arguments[0])
                         )
                             if (isNotEstimate) {
-                                innerParentPath.replaceWith(t.valueToNode(decode(innerParentNode.arguments[0].value)));
+                                const { value: encodedValue } = innerParentNode.arguments[0];
+
+                                innerParentPath.replaceWith(t.valueToNode(decode(encodedValue)));
 
                                 context.targetCount--;
                             } else

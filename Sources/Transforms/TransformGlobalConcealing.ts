@@ -1,33 +1,52 @@
+import type { NodePath } from "@babel/traverse";
+import { restoreVariableDeclaratorInit } from "./String/TransformStringConcealing";
 import type { Transform } from "./Transform";
 import * as t from "@babel/types";
 
-export function isGetGlobalFunctionDeclaration({ params, body: { body } }: t.FunctionDeclaration): boolean {
+export function isGetGlobalFunctionDeclaration(functionDeclarationPath: NodePath<t.FunctionDeclaration>):
+    functionDeclarationPath is NodePath<t.FunctionDeclaration & {
+        params: [];
+    }> {
+    const params = functionDeclarationPath.get("params"),
+        body = functionDeclarationPath.get("body.body");
+
     if (params.length !== 0)
         return false;
 
-    if (body.length !== 6)
+    if (6 > body.length)
         return false;
 
-    const { 0: firstStatement } = body;
+    { // First statement
+        const { 0: firstStatementPath } = body;
 
-    if (!(
-        t.isVariableDeclaration(firstStatement) &&
-        firstStatement.declarations.length === 1 &&
-        firstStatement.declarations[0].init &&
-        t.isArrayExpression(firstStatement.declarations[0].init)
-    ))
-        return false;
+        if (!firstStatementPath.isVariableDeclaration())
+            return false;
 
-    const lastStatement = body[body.length - 1];
+        const firstStatementPathDeclarationsPath = firstStatementPath.get("declarations");
+        if (firstStatementPathDeclarationsPath.length !== 1)
+            return;
 
-    if (!(
-        t.isReturnStatement(lastStatement) &&
-        lastStatement.argument &&
-        t.isLogicalExpression(lastStatement.argument) &&
-        t.isIdentifier(lastStatement.argument.left) &&
-        t.isThisExpression(lastStatement.argument.right)
-    ))
-        return false;
+        const { 0: firstStatementPathDeclarationPath } = firstStatementPathDeclarationsPath;
+
+        if (!restoreVariableDeclaratorInit(firstStatementPathDeclarationPath))
+            return false;
+
+        if (!firstStatementPathDeclarationPath.get("init").isArrayExpression())
+            return false;
+    }
+
+    { // Last statement
+        const { node: lastStatement } = body[body.length - 1];
+
+        if (!(
+            t.isReturnStatement(lastStatement) &&
+            lastStatement.argument &&
+            t.isLogicalExpression(lastStatement.argument) &&
+            t.isIdentifier(lastStatement.argument.left) &&
+            t.isThisExpression(lastStatement.argument.right)
+        ))
+            return false;
+    }
 
     return true;
 }
@@ -71,6 +90,7 @@ export default {
                                 id: { name },
                             },
                             scope,
+                            parentPath: { scope: parentScope },
                         } = path;
 
                         if (body.length !== 1)
@@ -125,15 +145,19 @@ export default {
                         if (!minimalSwitchCaseConsequentArgumentObjectNameBinding)
                             return;
 
-                        const {
-                            path: minimalSwitchCaseConsequentArgumentObjectNamePath,
-                            path: { node: minimalSwitchCaseConsequentArgumentObjectNameNode },
-                        } = minimalSwitchCaseConsequentArgumentObjectNameBinding;
+                        const { path: minimalSwitchCaseConsequentArgumentObjectNamePath } =
+                            minimalSwitchCaseConsequentArgumentObjectNameBinding;
+
+                        if (!minimalSwitchCaseConsequentArgumentObjectNamePath.isVariableDeclarator())
+                            return;
+
+                        if (!restoreVariableDeclaratorInit(minimalSwitchCaseConsequentArgumentObjectNamePath))
+                            return;
+
+                        const { node: minimalSwitchCaseConsequentArgumentObjectNameNode } =
+                            minimalSwitchCaseConsequentArgumentObjectNamePath;
 
                         if (!(
-                            t.isVariableDeclarator(minimalSwitchCaseConsequentArgumentObjectNameNode) &&
-                            t.isIdentifier(minimalSwitchCaseConsequentArgumentObjectNameNode.id) &&
-                            minimalSwitchCaseConsequentArgumentObjectNameNode.init &&
                             t.isCallExpression(minimalSwitchCaseConsequentArgumentObjectNameNode.init) &&
                             minimalSwitchCaseConsequentArgumentObjectNameNode.init.arguments.length === 0 &&
                             t.isIdentifier(minimalSwitchCaseConsequentArgumentObjectNameNode.init.callee)
@@ -148,27 +172,22 @@ export default {
                         if (!getGlobalFunctionBinding)
                             return;
 
-                        const {
-                            path: getGlobalFunctionPath,
-                            path: { node: getGlobalFunctionNode },
-                        } = getGlobalFunctionBinding;
+                        const { path: getGlobalFunctionPath } = getGlobalFunctionBinding;
 
-                        if (!t.isFunctionDeclaration(getGlobalFunctionNode))
+                        if (!getGlobalFunctionPath.isFunctionDeclaration())
                             return;
 
-                        if (!isGetGlobalFunctionDeclaration(getGlobalFunctionNode))
+                        if (!isGetGlobalFunctionDeclaration(getGlobalFunctionPath))
                             return;
 
-                        const nameBinding =
-                            scope.getBinding(name);
-                        if (!nameBinding)
+                        const nameBindingParent =
+                            parentScope.getBinding(name);
+                        if (!nameBindingParent)
                             return;
 
-                        const { referencePaths: nameBindingReferencePaths } = nameBinding;
+                        const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
 
-                        nameBindingReferencePaths.forEach(innerPath => {
-                            const { parent: innerParent, parentPath: innerParentPath } = innerPath;
-
+                        nameBindingParentReferencePaths.forEach(({ parent: innerParent, parentPath: innerParentPath }) => {
                             if (
                                 t.isCallExpression(innerParent) &&
                                 innerParent.arguments.length === 1 &&

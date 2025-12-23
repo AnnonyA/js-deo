@@ -1,3 +1,4 @@
+import { restoreVariableDeclaratorInit } from "./String/TransformStringConcealing";
 import { transformFunctionLengthSetterRemoval, type Transform } from "./Transform";
 import * as t from "@babel/types";
 
@@ -37,55 +38,60 @@ export default {
 
                         const { body: { body } } = node;
 
-                        if (body.length !== 2)
+                        if (2 > body.length)
                             return;
 
-                        const {
-                            0: bodyFirstStatement,
-                            1: bodySecondStatement,
-                        } = body;
+                        const bodyFirstStatementPath = path.get("body.body.0"),
+                            bodyLastStatement = body[body.length - 1];
 
                         if (!(
-                            t.isVariableDeclaration(bodyFirstStatement) &&
-                            t.isReturnStatement(bodySecondStatement)
+                            bodyFirstStatementPath.isVariableDeclaration() &&
+                            t.isReturnStatement(bodyLastStatement)
                         ))
                             return;
 
-                        const { declarations: bodyFirstStatementDeclarations } = bodyFirstStatement;
-                        if (bodyFirstStatementDeclarations.length !== 1)
+                        const bodyFirstStatementPathDeclarationsPath = bodyFirstStatementPath.get("declarations");
+                        if (bodyFirstStatementPathDeclarationsPath.length !== 1)
                             return;
 
-                        const { 0: { init: bodyFirstStatementDeclarationInit } } = bodyFirstStatementDeclarations;
-                        if (!t.isObjectExpression(bodyFirstStatementDeclarationInit))
+                        const { 0: bodyFirstStatementPathDeclaration } = bodyFirstStatementPathDeclarationsPath;
+
+                        if (!restoreVariableDeclaratorInit(bodyFirstStatementPathDeclaration))
                             return;
 
-                        const { argument: bodySecondStatementArgument } = bodySecondStatement;
-
-                        if (!t.isCallExpression(bodySecondStatementArgument))
+                        const bodyFirstStatementPathDeclarationInit = bodyFirstStatementPathDeclaration.get("init");
+                        if (!bodyFirstStatementPathDeclarationInit.isObjectExpression())
                             return;
 
-                        if (!t.isIdentifier(bodySecondStatementArgument.callee))
+                        const { node: { properties: bodyFirstStatementDeclarationInitProperties } } =
+                            bodyFirstStatementPathDeclarationInit;
+
+                        const { argument: bodyLastStatementArgument } = bodyLastStatement;
+
+                        if (!t.isCallExpression(bodyLastStatementArgument))
                             return;
 
-                        const { callee: { name: bodySecondStatementArgumentCalleeName } }
-                            = bodySecondStatementArgument;
-
-                        const bodySecondStatementArgumentCalleeNameBinding =
-                            scope.getBinding(bodySecondStatementArgumentCalleeName);
-                        if (!(
-                            bodySecondStatementArgumentCalleeNameBinding &&
-                            bodySecondStatementArgumentCalleeNameBinding.path.isFunctionDeclaration()
-                        ))
+                        if (!t.isIdentifier(bodyLastStatementArgument.callee))
                             return;
 
-                        const {
-                            path: bodySecondStatementArgumentCalleeNameBindingPath,
-                            path: { node: bodySecondStatementArgumentCalleeNameBindingNode },
-                        } = bodySecondStatementArgumentCalleeNameBinding;
+                        const { callee: { name: bodyLastStatementArgumentCalleeName } }
+                            = bodyLastStatementArgument;
+
+                        const bodyLastStatementArgumentCalleeNameBinding =
+                            scope.getBinding(bodyLastStatementArgumentCalleeName);
+                        if (!bodyLastStatementArgumentCalleeNameBinding)
+                            return;
+
+                        const { path: bodyLastStatementArgumentCalleeNameBindingPath } = bodyLastStatementArgumentCalleeNameBinding;
+                        if (!bodyLastStatementArgumentCalleeNameBindingPath.isFunctionDeclaration())
+                            return;
+
+                        const { node: bodyLastStatementArgumentCalleeNameBindingNode } =
+                            bodyLastStatementArgumentCalleeNameBindingPath;
 
                         const keyToPseudoEntry = new Map<string, PseudoFlattenEntry>;
 
-                        bodyFirstStatementDeclarationInit.properties.forEach(property => {
+                        bodyFirstStatementDeclarationInitProperties.forEach(property => {
                             if (!t.isObjectMethod(property)) return;
 
                             let propertyKey: string;
@@ -143,21 +149,19 @@ export default {
                         });
 
                         const {
-                            body: { body: bodySecondStatementArgumentCalleeNameBindingNodeBody },
-                        } = bodySecondStatementArgumentCalleeNameBindingNode;
-
-                        const { params: { length: bodySecondStatementArgumentCalleeNameBindingNodeParamsLength } } =
-                            bodySecondStatementArgumentCalleeNameBindingNode;
+                            params: { length: bodyLastStatementArgumentCalleeNameBindingNodeParamsLength },
+                            body: { body: bodyLastStatementArgumentCalleeNameBindingNodeBody },
+                        } = bodyLastStatementArgumentCalleeNameBindingNode;
 
                         let bodySecondStatementArgumentCalleeNameBindingNodeCloned: t.FunctionDeclaration;
 
-                        switch (bodySecondStatementArgumentCalleeNameBindingNodeParamsLength) {
+                        switch (bodyLastStatementArgumentCalleeNameBindingNodeParamsLength) {
                             case 0: {
                                 // Use strict enabled, directives are not removed
 
-                                if (t.isVariableDeclaration(bodySecondStatementArgumentCalleeNameBindingNodeBody[0])) {
+                                if (t.isVariableDeclaration(bodyLastStatementArgumentCalleeNameBindingNodeBody[0])) {
                                     const argumentsArrayPattern =
-                                        bodySecondStatementArgumentCalleeNameBindingNodeBody[0].declarations
+                                        bodyLastStatementArgumentCalleeNameBindingNodeBody[0].declarations
                                             .find(
                                                 ({ id }) =>
                                                     t.isArrayPattern(id) &&
@@ -179,13 +183,13 @@ export default {
 
                                     // With strict mode enabled, this causes error when generate this, 
                                     // but in the case we won't generate this, so this is safe to do
-                                    bodySecondStatementArgumentCalleeNameBindingNode.params =
+                                    bodyLastStatementArgumentCalleeNameBindingNode.params =
                                         argumentsArrayPatternIdElements;
 
-                                    bodySecondStatementArgumentCalleeNameBindingNode.body.body.shift();
+                                    bodyLastStatementArgumentCalleeNameBindingNode.body.body.shift();
 
                                     bodySecondStatementArgumentCalleeNameBindingNodeCloned =
-                                        t.cloneNode(bodySecondStatementArgumentCalleeNameBindingNode, true);
+                                        t.cloneNode(bodyLastStatementArgumentCalleeNameBindingNode, true);
                                 }
 
                                 break;
@@ -200,25 +204,25 @@ export default {
 
                         const {
                             params: {
-                                0: bodySecondStatementArgumentCalleeNameBindingNodeFirstParam,
-                                1: bodySecondStatementArgumentCalleeNameBindingNodeSecondParam,
+                                0: bodyLastStatementArgumentCalleeNameBindingNodeFirstParam,
+                                1: bodyLastStatementArgumentCalleeNameBindingNodeSecondParam,
                             },
-                        } = bodySecondStatementArgumentCalleeNameBindingNode;
+                        } = bodyLastStatementArgumentCalleeNameBindingNode;
 
-                        if (!t.isArrayPattern(bodySecondStatementArgumentCalleeNameBindingNodeFirstParam))
+                        if (!t.isArrayPattern(bodyLastStatementArgumentCalleeNameBindingNodeFirstParam))
                             return;
 
-                        if (!t.isIdentifier(bodySecondStatementArgumentCalleeNameBindingNodeSecondParam))
+                        if (!t.isIdentifier(bodyLastStatementArgumentCalleeNameBindingNodeSecondParam))
                             return;
 
                         if (isNotEstimate) {
                             const { name: bodySecondStatementArgumentCalleeNameBindingNodeSecondParamName } =
-                                bodySecondStatementArgumentCalleeNameBindingNodeSecondParam;
+                                bodyLastStatementArgumentCalleeNameBindingNodeSecondParam;
 
                             const bodyPath = path.get("body");
 
                             // Do this before traverse!
-                            bodyPath.replaceWith(bodySecondStatementArgumentCalleeNameBindingNode.body);
+                            bodyPath.replaceWith(bodyLastStatementArgumentCalleeNameBindingNode.body);
 
                             bodyPath.traverse({
                                 MemberExpression(innerPath) {
@@ -282,7 +286,7 @@ export default {
                             });
 
                             node.params =
-                                bodySecondStatementArgumentCalleeNameBindingNodeFirstParam.elements.filter(t.isFunctionParameter);
+                                bodyLastStatementArgumentCalleeNameBindingNodeFirstParam.elements.filter(t.isFunctionParameter);
 
                             if (
                                 node.body.directives.length > 0 &&
@@ -298,11 +302,11 @@ export default {
                                 node.generator,
                             ] =
                                 [
-                                    bodySecondStatementArgumentCalleeNameBindingNode.async,
-                                    bodySecondStatementArgumentCalleeNameBindingNode.generator,
+                                    bodyLastStatementArgumentCalleeNameBindingNode.async,
+                                    bodyLastStatementArgumentCalleeNameBindingNode.generator,
                                 ];
 
-                            bodySecondStatementArgumentCalleeNameBindingPath.remove();
+                            bodyLastStatementArgumentCalleeNameBindingPath.remove();
 
                             { // Recrawl prgoram scope
                                 const { scope: programScope } = path.findParent(({ node }) => t.isProgram(node));
@@ -310,12 +314,14 @@ export default {
                                 programScope.crawl();
                             }
 
+                            console.log("Restored flattened function");
+
                             context.targetCount--;
                         } else {
                             context.targetCount++;
 
-                            if (bodySecondStatementArgumentCalleeNameBindingNodeParamsLength === 0) // Restore it back
-                                bodySecondStatementArgumentCalleeNameBindingPath
+                            if (bodyLastStatementArgumentCalleeNameBindingNodeParamsLength === 0) // Restore it back
+                                bodyLastStatementArgumentCalleeNameBindingPath
                                     .replaceWith(bodySecondStatementArgumentCalleeNameBindingNodeCloned);
                         }
                     },
