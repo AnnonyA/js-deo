@@ -14,8 +14,7 @@ export default {
                 // TODO: remove library code and string get function too
 
                 CallExpression(path) {
-                    const { node } = path;
-                    const { callee } = node;
+                    const { node: { callee } } = path;
 
                     if (!t.isFunctionExpression(callee))
                         return;
@@ -34,11 +33,19 @@ export default {
 
                     // First statement
 
-                    if (!(t.isVariableDeclaration(firstStatement) && firstStatement.declarations.length === 1))
+                    if (!(
+                        t.isVariableDeclaration(firstStatement) &&
+                        firstStatement.declarations.length === 1
+                    ))
                         return;
 
                     const { 0: firstStatementDeclaration } = firstStatement.declarations;
-                    if (!(firstStatementDeclaration.init && t.isStringLiteral(firstStatementDeclaration.init) && t.isIdentifier(firstStatementDeclaration.id)))
+
+                    if (!(
+                        firstStatementDeclaration.init &&
+                        t.isStringLiteral(firstStatementDeclaration.init) &&
+                        t.isIdentifier(firstStatementDeclaration.id)
+                    ))
                         return;
 
                     const {
@@ -48,7 +55,10 @@ export default {
 
                     // Second statement
 
-                    if (!(t.isVariableDeclaration(secondStatement) && secondStatement.declarations.length === 1))
+                    if (!(
+                        t.isVariableDeclaration(secondStatement) &&
+                        secondStatement.declarations.length === 1
+                    ))
                         return;
 
                     const { declarations: { 0: secondStatementDeclaration } } = secondStatement;
@@ -74,7 +84,10 @@ export default {
 
                     const { id: { name: secondStatementDeclarationName } } = secondStatementDeclaration;
 
-                    if (!(t.isVariableDeclaration(thirdStatement) && thirdStatement.declarations.length === 1))
+                    if (!(
+                        t.isVariableDeclaration(thirdStatement) &&
+                        thirdStatement.declarations.length === 1
+                    ))
                         return;
 
                     const { declarations: { 0: thirdStatementDeclaration } } = thirdStatement;
@@ -126,7 +139,10 @@ export default {
                         return;
 
                     const { body: { body: fourthStatementExpressionRightBodyBody } } = fourthStatementExpressionRight;
-                    if (!(fourthStatementExpressionRightBodyBody.length === 1 && t.isReturnStatement(fourthStatementExpressionRightBodyBody[0])))
+                    if (!(
+                        fourthStatementExpressionRightBodyBody.length === 1 &&
+                        t.isReturnStatement(fourthStatementExpressionRightBodyBody[0])
+                    ))
                         return;
 
                     const { argument: fourthStatementExpressionRightBodyBodyReturnArgument } = fourthStatementExpressionRightBodyBody[0];
@@ -143,17 +159,18 @@ export default {
 
                     const { name: fourthStatementExpressionLeftName } = fourthStatementExpressionLeft;
 
-                    const { parentPath: { scope: parentScope } } = path;
+                    const {
+                        scope,
+                        parentPath: { scope: parentScope },
+                    } = path;
 
-                    const parentScopeFourthStatementExpressionLeftNameBinding =
+                    const fourthStatementExpressionLeftNameBindingParent =
                         parentScope.getBinding(fourthStatementExpressionLeftName);
 
-                    const {
-                        path: parentScopeFourthStatementExpressionLeftNameBindingPath,
-                        referencePaths: parentScopeFourthStatementExpressionLeftNameBindingReferencePaths,
-                    } = parentScopeFourthStatementExpressionLeftNameBinding;
+                    const { referencePaths: fourthStatementExpressionLeftNameBindingParentReferencePaths } =
+                        fourthStatementExpressionLeftNameBindingParent;
 
-                    parentScopeFourthStatementExpressionLeftNameBindingReferencePaths
+                    fourthStatementExpressionLeftNameBindingParentReferencePaths
                         .forEach(path => {
                             const { parentPath } = path;
 
@@ -181,7 +198,13 @@ export default {
                         });
 
                     if (isNotEstimate) {
-                        parentScopeFourthStatementExpressionLeftNameBindingPath.remove();
+                        const fourthStatementExpressionLeftNameBinding =
+                            scope.getBinding(fourthStatementExpressionLeftName);
+
+                        const { path: fourthStatementExpressionLeftNameBindingPath } =
+                            fourthStatementExpressionLeftNameBinding;
+
+                        fourthStatementExpressionLeftNameBindingPath.remove();
 
                         path.remove();
                     }

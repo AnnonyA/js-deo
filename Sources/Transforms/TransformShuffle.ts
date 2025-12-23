@@ -55,12 +55,12 @@ export default {
                         ) {
                             const { name: calleeName } = callee;
 
-                            const calleeBinding = scope.getBinding(calleeName);
+                            const calleeNameBinding = scope.getBinding(calleeName);
 
                             if (
-                                calleeBinding &&
-                                calleeBinding.path.isFunctionDeclaration() &&
-                                (calleeBinding.path === unshuffleFunctionDeclarationPath || isUnshuffleFunctionDeclaration(calleeBinding.path.node))
+                                calleeNameBinding &&
+                                calleeNameBinding.path.isFunctionDeclaration() &&
+                                (calleeNameBinding.path === unshuffleFunctionDeclarationPath || isUnshuffleFunctionDeclaration(calleeNameBinding.path.node))
                             ) {
                                 if (isNotEstimate)
                                     console.log("Detected shuffle function name:", calleeName);
@@ -85,7 +85,7 @@ export default {
                                         path.replaceWith(t.arrayExpression(arrayArgumentElementsCopied));
 
                                         if (!unshuffleFunctionDeclarationPath)
-                                            unshuffleFunctionDeclarationPath = calleeBinding.path;
+                                            unshuffleFunctionDeclarationPath = calleeNameBinding.path;
 
                                         { // Log
                                             console.log("Unshuffled array, shift:", shiftArgumentValue);

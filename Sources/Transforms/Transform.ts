@@ -105,14 +105,14 @@ export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = cont
             if (isNotEstimate) {
                 const { scope: parentScope } = parentPath;
 
-                const parentNameBinding = parentScope.getBinding(name);
-                if (!parentNameBinding)
+                const nameBindingParent = parentScope.getBinding(name);
+                if (!nameBindingParent)
                     return;
 
-                const { referencePaths: parentNameBindingReferencePaths } =
-                    parentNameBinding;
+                const { referencePaths: nameBindingParentReferencePaths } =
+                    nameBindingParent;
 
-                parentNameBindingReferencePaths.forEach(innerPath => {
+                nameBindingParentReferencePaths.forEach(innerPath => {
                     const { parent: innerParent, parentPath: innerParentPath } = innerPath;
 
                     const { parentPath: innerParentParentPath } = innerParentPath;

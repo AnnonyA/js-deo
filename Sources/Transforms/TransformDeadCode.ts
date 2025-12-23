@@ -22,23 +22,26 @@ export default {
                             if (isNotEstimate) {
                                 path.get("consequent").traverse({
                                     CallExpression(innerPath) {
-                                        const { node: { callee }, scope: innerScope } = innerPath;
+                                        const {
+                                            node: { callee: innerCallee },
+                                            scope: innerScope,
+                                        } = innerPath;
 
-                                        if (!t.isIdentifier(callee))
+                                        if (!t.isIdentifier(innerCallee))
                                             return;
 
-                                        const { name: calleeName } = callee;
+                                        const { name: innerCalleeName } = innerCallee;
 
-                                        const calleeNameBinding = innerScope.getBinding(calleeName);
-                                        if (!calleeNameBinding)
+                                        const innerCalleeNameBinding = innerScope.getBinding(innerCalleeName);
+                                        if (!innerCalleeNameBinding)
                                             return;
 
-                                        const { path: calleeNameBindingPath } = calleeNameBinding;
+                                        const { path: innerCalleeNameBindingPath } = innerCalleeNameBinding;
 
-                                        if (calleeNameBindingPath.isFunctionDeclaration()) {
-                                            calleeNameBindingPath.remove();
+                                        if (innerCalleeNameBindingPath.isFunctionDeclaration()) {
+                                            innerCalleeNameBindingPath.remove();
 
-                                            console.log("Removed dead function:", calleeName);
+                                            console.log("Removed dead function:", innerCalleeName);
                                         }
                                     },
                                 });

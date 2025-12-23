@@ -3,16 +3,17 @@ import { restoreVariableDeclaratorInit } from "./String/TransformStringConcealin
 import type { Transform } from "./Transform";
 import * as t from "@babel/types";
 
-export function isGetGlobalFunctionDeclaration(functionDeclarationPath: NodePath<t.FunctionDeclaration>): functionDeclarationPath is NodePath<t.FunctionDeclaration & {
-    params: [];
-}> {
+export function isGetGlobalFunctionDeclaration(functionDeclarationPath: NodePath<t.FunctionDeclaration>):
+    functionDeclarationPath is NodePath<t.FunctionDeclaration & {
+        params: [];
+    }> {
     const params = functionDeclarationPath.get("params"),
         body = functionDeclarationPath.get("body.body");
 
     if (params.length !== 0)
         return false;
 
-    if (6 >= body.length)
+    if (6 > body.length)
         return false;
 
     { // First statement
@@ -21,17 +22,16 @@ export function isGetGlobalFunctionDeclaration(functionDeclarationPath: NodePath
         if (!firstStatementPath.isVariableDeclaration())
             return false;
 
-        const { node: { declarations: firstStatementDeclarations } } = firstStatementPath;
+        const firstStatementPathDeclarationsPath = firstStatementPath.get("declarations");
+        if (firstStatementPathDeclarationsPath.length !== 1)
+            return;
 
-        if (firstStatementDeclarations.length !== 1)
+        const { 0: firstStatementPathDeclarationPath } = firstStatementPathDeclarationsPath;
+
+        if (!restoreVariableDeclaratorInit(firstStatementPathDeclarationPath))
             return false;
 
-        const declaratorPath = firstStatementPath.get("declarations.0");
-
-        if (!restoreVariableDeclaratorInit(declaratorPath))
-            return false;
-
-        if (!declaratorPath.get("init").isArrayExpression())
+        if (!firstStatementPathDeclarationPath.get("init").isArrayExpression())
             return false;
     }
 
@@ -90,6 +90,7 @@ export default {
                                 id: { name },
                             },
                             scope,
+                            parentPath: { scope: parentScope },
                         } = path;
 
                         if (body.length !== 1)
@@ -179,16 +180,14 @@ export default {
                         if (!isGetGlobalFunctionDeclaration(getGlobalFunctionPath))
                             return;
 
-                        const nameBinding =
-                            scope.getBinding(name);
-                        if (!nameBinding)
+                        const nameBindingParent =
+                            parentScope.getBinding(name);
+                        if (!nameBindingParent)
                             return;
 
-                        const { referencePaths: nameBindingReferencePaths } = nameBinding;
+                        const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
 
-                        nameBindingReferencePaths.forEach(innerPath => {
-                            const { parent: innerParent, parentPath: innerParentPath } = innerPath;
-
+                        nameBindingParentReferencePaths.forEach(({ parent: innerParent, parentPath: innerParentPath }) => {
                             if (
                                 t.isCallExpression(innerParent) &&
                                 innerParent.arguments.length === 1 &&

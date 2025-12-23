@@ -139,7 +139,10 @@ export default {
 
             return {
                 FunctionDeclaration(path) {
-                    const { node, scope } = path;
+                    const {
+                        node,
+                        parentPath: { scope: parentScope },
+                    } = path;
 
                     if (!node.generator)
                         return;
@@ -148,10 +151,6 @@ export default {
                         params,
                         id: { name },
                     } = node;
-
-                    const nameBinding = scope.getBinding(name);
-                    if (!nameBinding)
-                        return;
 
                     let { params: { length: paramsLength } } = node;
 
@@ -173,10 +172,14 @@ export default {
                     const flowPositionParams = params.slice(0, paramsLength - 1);
                     const constantHolderParam = params[paramsLength - 1];
 
-                    const { referencePaths } = nameBinding;
+                    const nameBindingParent = parentScope.getBinding(name);
+                    if (!nameBindingParent)
+                        return;
+
+                    const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
 
                     const cffStartFunction =
-                        referencePaths
+                        nameBindingParentReferencePaths
                             .find(({ parent: innerParent }) =>
                                 t.isCallExpression(innerParent) &&
                                 innerParent.arguments.length === flowPositionParams.length,

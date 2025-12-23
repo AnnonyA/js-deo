@@ -8,10 +8,11 @@ import type { NodePath } from "@babel/traverse";
  * @remarks
  * Unsafe.
  */
-export function restoreVariableDeclaratorInit(varaibleDeclaratorPath: NodePath<t.VariableDeclarator>): varaibleDeclaratorPath is NodePath<t.VariableDeclarator & {
-    id: t.Identifier;
-    init: t.Node;
-}> {
+export function restoreVariableDeclaratorInit(varaibleDeclaratorPath: NodePath<t.VariableDeclarator>):
+    varaibleDeclaratorPath is NodePath<t.VariableDeclarator & {
+        id: t.Identifier;
+        init: t.Node;
+    }> {
     const { node, scope } = varaibleDeclaratorPath;
 
     if (node.init)
@@ -43,7 +44,8 @@ export function restoreVariableDeclaratorInit(varaibleDeclaratorPath: NodePath<t
         ))
             continue;
 
-        varaibleDeclaratorPath.get("init").replaceWith(constantViolationNode.right);
+        varaibleDeclaratorPath.get("init")
+            .replaceWith(constantViolationNode.right);
 
         // We don't need slow-assignment anymore
         constantViolation.remove();
@@ -92,6 +94,7 @@ export default {
                             body: { body },
                         },
                         scope,
+                        parentPath: { scope: parentScope },
                     } = path;
 
                     if (params.length !== 1)
@@ -253,7 +256,7 @@ export default {
                     ))
                         return;
 
-                    const stringArray = stringArrayNameBindingNode.init.elements.map(element => element.value);
+                    const stringArrayValued = stringArrayNameBindingNode.init.elements.map(element => element.value);
 
                     const decodeFunctionNameBinding = scope.getBinding(decodeFunctionName);
                     if (!decodeFunctionNameBinding)
@@ -343,7 +346,7 @@ export default {
                             return indexCachedDecoded;
                         }
 
-                        const decoded = innerDecode(stringArray[index]);
+                        const decoded = innerDecode(stringArrayValued[index]);
 
                         console.log(`Index ${index} decoded: "${decoded}"`);
 
@@ -352,20 +355,22 @@ export default {
                         return decoded;
                     };
 
-                    const nameBinding = scope.getBinding(name);
-                    if (!nameBinding)
+                    const nameBindingParent = parentScope.getBinding(name);
+                    if (!nameBindingParent)
                         return;
 
-                    const { referencePaths: nameBindingReferencePaths } = nameBinding;
+                    const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
 
-                    nameBindingReferencePaths.forEach(({ parentPath: innerParentPath, parentPath: { node: innerParentNode } }) => {
+                    nameBindingParentReferencePaths.forEach(({ parentPath: innerParentPath, parentPath: { node: innerParentNode } }) => {
                         if (
                             t.isCallExpression(innerParentNode) &&
                             innerParentNode.arguments.length === 1 &&
                             t.isNumericLiteral(innerParentNode.arguments[0])
                         )
                             if (isNotEstimate) {
-                                innerParentPath.replaceWith(t.valueToNode(decode(innerParentNode.arguments[0].value)));
+                                const { value: encodedValue } = innerParentNode.arguments[0];
+
+                                innerParentPath.replaceWith(t.valueToNode(decode(encodedValue)));
 
                                 context.targetCount--;
                             } else
