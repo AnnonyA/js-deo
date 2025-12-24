@@ -1,6 +1,6 @@
 import { type Transform } from "./Transform";
 import * as t from "@babel/types";
-import { containerContainsExpression, isForLoopInitializer } from "./TransformVariableMasking";
+import { containerContainsExpression, isForLoopInitializer, isForStatementInitNodePath, isForXStatementLeftNodePath } from "./TransformVariableMasking";
 
 type FunctionExpressionAssignmentExpression = t.AssignmentExpression & {
     left: t.Identifier;
@@ -155,6 +155,61 @@ export default {
                             } = paramNameBinding;
 
                             for (const constantViolation of paramNameBindingConstantViolations) {
+                                // If parameter is used like "for (param X some) { ... }", constant violation is ForXStatement
+                                if (constantViolation.isForXStatement()) {
+                                    const constantViolationLeftPath = constantViolation.get("left");
+
+                                    const { node: { start: forXStatementStart } } = constantViolation;
+
+                                    const isUsedBeforeForXStatement =
+                                        forXStatementStart &&
+                                        paramNameBindingReferencePaths.some(
+                                            referencePath => {
+                                                const { node: { start: referenceStart } } = referencePath;
+
+                                                // Exclude references inside the ForXStatement itself
+                                                if (referencePath.findParent(path => path === constantViolation))
+                                                    return false;
+
+                                                return referenceStart &&
+                                                    referenceStart < forXStatementStart;
+                                            },
+                                        );
+
+                                    if (isUsedBeforeForXStatement) {
+                                        if (isNotEstimate)
+                                            console.log(`Variable ${paramName} is used before for-in/for-of statement`);
+
+                                        continue;
+                                    }
+
+                                    if (isNotEstimate) {
+                                        constantViolationLeftPath.replaceWith(t.variableDeclaration(
+                                            "var",
+                                            [
+                                                t.variableDeclarator(
+                                                    t.identifier(paramName),
+                                                ),
+                                            ],
+                                        ));
+
+                                        node.params =
+                                            node.params.filter(
+                                                innerParam =>
+                                                    !t.isIdentifier(innerParam, { name: paramName }),
+                                            );
+
+                                        console.log("Moved variable (forX):", paramName);
+
+                                        context.targetCount--;
+
+                                        break;
+                                    } else
+                                        context.targetCount++;
+
+                                    continue;
+                                }
+
                                 if (!constantViolation.isAssignmentExpression())
                                     continue;
 
@@ -171,11 +226,11 @@ export default {
                                     continue;
 
                                 const isInnerParentPathExpressionStatement = innerParentPath.isExpressionStatement(),
-                                    isConstantViolationForLoopInitializer = isForLoopInitializer(constantViolation);
+                                    isConstantViolationForStatementInitNodePath = isForStatementInitNodePath(constantViolation);
 
                                 if (!(
                                     isInnerParentPathExpressionStatement ||
-                                    isConstantViolationForLoopInitializer
+                                    isConstantViolationForStatementInitNodePath
                                 ))
                                     continue;
 
@@ -210,7 +265,7 @@ export default {
 
                                         if (isInnerParentPathExpressionStatement)
                                             innerParentPath.replaceWith(newInnerParent);
-                                        else if (isConstantViolationForLoopInitializer)
+                                        else if (isConstantViolationForStatementInitNodePath)
                                             constantViolation.replaceWith(newInnerParent);
                                         else
                                             continue;

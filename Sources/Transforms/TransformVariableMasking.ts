@@ -46,26 +46,35 @@ export const containerContainsExpression = (containerPath: NodePath, targetNode:
     return found;
 };
 
-export function isForLoopInitializer(path: NodePath):
-    path is NodePath & (
-        | {
-            parent: t.ForStatement;
-            parentPath: NodePath<t.ForStatement>;
-            key: "init";
-        }
-        | {
-            parent: t.ForXStatement;
-            parentPath: NodePath<t.ForXStatement>;
-            key: "left";
-        }
-    ) {
+export type ForStatementInitNodePath = NodePath & {
+    parent: t.ForStatement;
+    parentPath: NodePath<t.ForStatement>;
+    key: "init";
+};
+
+export function isForStatementInitNodePath(path: NodePath): path is ForStatementInitNodePath {
     const { parentPath, key } = path;
 
-    return (
-        (parentPath.isForStatement() && key === "init") ||
-        (parentPath.isForXStatement() && key === "left")
-    );
+    return parentPath.isForStatement() && key === "init";
 }
+
+export type ForXStatementLeftNodePath = NodePath & {
+    parent: t.ForXStatement;
+    parentPath: NodePath<t.ForXStatement>;
+
+    key: "left";
+};
+
+export function isForXStatementLeftNodePath(path: NodePath): path is ForXStatementLeftNodePath {
+    const { parentPath, key } = path;
+
+    return parentPath.isForXStatement() && key === "left";
+}
+
+export const isForLoopInitializer =
+    (path: NodePath): path is ForStatementInitNodePath | ForXStatementLeftNodePath =>
+        isForStatementInitNodePath(path) ||
+        isForXStatementLeftNodePath(path);
 
 export default {
     name: "VariableMasking",
