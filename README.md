@@ -2,6 +2,11 @@
 
 **This tool is under development**
 
+Currently supported presets:
+- [x] low
+- [ ] medium
+- [ ] high
+
 ## Instruction
 
 1. Download and unzip this project
