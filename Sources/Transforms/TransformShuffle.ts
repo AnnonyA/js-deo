@@ -47,7 +47,13 @@ export default {
 
                 return {
                     CallExpression(path) {
-                        const { node: { callee, arguments: ourArguments }, scope } = path;
+                        const {
+                            node: {
+                                callee,
+                                arguments: ourArguments,
+                            },
+                            scope,
+                        } = path;
 
                         if (
                             ourArguments.length === 2 &&

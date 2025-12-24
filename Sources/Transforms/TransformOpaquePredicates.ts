@@ -17,8 +17,8 @@ export function isPredicate(path: NodePath): boolean {
     if (!path.isBinaryExpression({ operator: "in" }))
         return false;
 
-    const leftPath = path.get("left");
-    const rightPath = path.get("right");
+    const leftPath = path.get("left"),
+        rightPath = path.get("right");
 
     if (!leftPath.isStringLiteral() || !rightPath.isIdentifier())
         return false;

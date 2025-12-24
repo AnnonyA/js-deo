@@ -15,13 +15,15 @@ const isCalculatorFunctionCase = (ourCase: t.SwitchCase): ourCase is t.SwitchCas
 } => {
     const { test, consequent } = ourCase;
 
-    return consequent.length === 1 &&
+    return (
+        consequent.length === 1 &&
         t.isReturnStatement(consequent[0]) &&
         consequent[0].argument &&
         t.isBinaryExpression(consequent[0].argument) &&
         t.isIdentifier(consequent[0].argument.left) &&
         t.isIdentifier(consequent[0].argument.right) &&
-        t.isStringLiteral(test);
+        t.isStringLiteral(test)
+    );
 };
 
 export default {

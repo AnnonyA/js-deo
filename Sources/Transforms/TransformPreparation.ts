@@ -1,11 +1,11 @@
 import generate from "@babel/generator";
-import type { Transform } from "./Transform";
+import { transformFunctionLength, type Transform } from "./Transform";
 import * as t from "@babel/types";
 
 export default {
     name: "Preparation",
     preRunWebcrack: false,
-    postRunWebcrack: false,
+    postRunWebcrack: true, // Run webcrack, then run transformFunctionLength
     contextedVisitor: context => ({
         on(isEstimate) {
             const isNotEstimate = !isEstimate;
@@ -61,6 +61,6 @@ export default {
         post: null,
 
         first: null,
-        final: null,
+        final: transformFunctionLength(context, true), 
     }),
 } satisfies Transform;

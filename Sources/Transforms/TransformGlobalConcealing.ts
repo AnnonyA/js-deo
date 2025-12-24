@@ -7,36 +7,36 @@ export function isGetGlobalFunctionDeclaration(functionDeclarationPath: NodePath
     functionDeclarationPath is NodePath<t.FunctionDeclaration & {
         params: [];
     }> {
-    const params = functionDeclarationPath.get("params"),
-        body = functionDeclarationPath.get("body.body");
+    const paramsPath = functionDeclarationPath.get("params"),
+        bodyPath = functionDeclarationPath.get("body.body");
 
-    if (params.length !== 0)
+    if (paramsPath.length !== 0)
         return false;
 
-    if (6 > body.length)
+    if (6 > bodyPath.length)
         return false;
 
     { // First statement
-        const { 0: firstStatementPath } = body;
+        const { 0: firstStatementPath } = bodyPath;
 
         if (!firstStatementPath.isVariableDeclaration())
             return false;
 
-        const firstStatementPathDeclarationsPath = firstStatementPath.get("declarations");
-        if (firstStatementPathDeclarationsPath.length !== 1)
+        const firstStatementDeclarationsPath = firstStatementPath.get("declarations");
+        if (firstStatementDeclarationsPath.length !== 1)
             return;
 
-        const { 0: firstStatementPathDeclarationPath } = firstStatementPathDeclarationsPath;
+        const { 0: firstStatementDeclarationPath } = firstStatementDeclarationsPath;
 
-        if (!restoreVariableDeclaratorInit(firstStatementPathDeclarationPath))
+        if (!restoreVariableDeclaratorInit(firstStatementDeclarationPath))
             return false;
 
-        if (!firstStatementPathDeclarationPath.get("init").isArrayExpression())
+        if (!firstStatementDeclarationPath.get("init").isArrayExpression())
             return false;
     }
 
     { // Last statement
-        const { node: lastStatement } = body[body.length - 1];
+        const { node: lastStatement } = bodyPath[bodyPath.length - 1];
 
         if (!(
             t.isReturnStatement(lastStatement) &&

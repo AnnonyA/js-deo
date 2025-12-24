@@ -6,6 +6,7 @@ import { webcrack } from "webcrack";
 import generate from "@babel/generator";
 import cliProgress from "cli-progress";
 import * as readline from "readline";
+import { writeFileSync } from "fs";
 
 import transformPack from "./TransformPack";
 import transformASTScrambler from "./TransformASTScrambler";
@@ -57,7 +58,7 @@ export const ALL_TRANSFORMS: ReadonlyArray<Transform> = [
 /**
  * Removes function length setter and it references.
  */
-export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = context => isEstimate => {
+export const transformFunctionLength = ((context, removeArgumentsLengthSetterFunction: boolean) => isEstimate => {
     const isNotEstimate = !isEstimate;
 
     return {
@@ -120,9 +121,9 @@ export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = cont
                     if (t.isCallExpression(innerParent)) {
                         const { arguments: { length: innerParentArgumentsLength } } = innerParent;
 
-                        if (innerParentArgumentsLength === 1 || innerParentArgumentsLength === 2) {
-                            const isArgumentsLengthOne = innerParentArgumentsLength === 1;
+                        const isArgumentsLengthOne = innerParentArgumentsLength === 1;
 
+                        if (isArgumentsLengthOne || innerParentArgumentsLength === 2) {
                             if (innerParentParentPath.isExpressionStatement()) {
                                 innerParentParentPath.remove();
                             } else if (t.isExpression(innerParent.arguments[0])) // Currently same with any arguments length, but we'll handle this later
@@ -133,16 +134,18 @@ export const transformFunctionLengthSetterRemoval: SharedEstimableVisitor = cont
                     }
                 });
 
-                path.remove();
+                if (removeArgumentsLengthSetterFunction) {
+                    path.remove();
 
-                console.log("Removed arguments length set function:", name);
+                    console.log("Removed arguments length set function:", name);
+                }
 
                 context.targetCount--;
             } else
                 context.targetCount++;
         },
     };
-};
+}) satisfies SharedEstimableVisitor;
 
 const webcrackAST = async (ast: parser.ParseResult) => {
     const { code: generatedASTCode } = generate(ast);
@@ -150,6 +153,7 @@ const webcrackAST = async (ast: parser.ParseResult) => {
     const { code: webcrackedGeneratedASTCode } = await webcrack(generatedASTCode, {
         jsx: false,
         unpack: false,
+        deobfuscate: false,
     });
 
     // TODO: progrss bar for webcrack
@@ -260,7 +264,7 @@ export async function transform(ast: parser.ParseResult, verbose: boolean = true
 
             if (initialTargetCount > 0) {
                 if (verbose) {
-                    singleProgressBar?.setTotal(initialTargetCount + 1);
+                    singleProgressBar?.setTotal(initialTargetCount);
                     singleProgressBar?.update(0, { transformName });
                 }
 
@@ -269,16 +273,9 @@ export async function transform(ast: parser.ParseResult, verbose: boolean = true
 
                     traverse(ast, visitor(false));
 
-                    // This makes progress bar more beautiful
-                    if (verbose)
-                        await new Promise(resolve => setTimeout(resolve, 50));
-
-                    // To at least show 10ms completed progress bar
-                    transformContext.targetCount++;
-
                     isTransformRunning = false;
                 }
-            } else {
+            } else
                 if (verbose) {
                     // Do these before, so console.log can show this properly
                     singleProgressBar?.setTotal(1);
@@ -286,7 +283,6 @@ export async function transform(ast: parser.ParseResult, verbose: boolean = true
 
                     console.log("No targets found");
                 }
-            }
 
             if (verbose)
                 console.groupEnd();
@@ -346,6 +342,9 @@ export async function transform(ast: parser.ParseResult, verbose: boolean = true
         for (const [name, visitor] of finalVisitors) // Execute final visitors
             await traverseASTProgressed(visitor, `${name} (Final)`);
 
+        // Simplify overall transformations
+        await webcrackAST(ast);
+
         if (verbose)
             singleProgressBar?.update(singleProgressBar.getTotal(), { transformName: "Completed" });
     } finally {
@@ -362,7 +361,7 @@ export async function transform(ast: parser.ParseResult, verbose: boolean = true
 
 // TODO: make all shared estimable visitor return set of it target, and force require delete for each of transforms,
 // thus a transform can averagely log
-export type SharedEstimableVisitor = (context: TransformContext) => EstimableVisitor;
+export type SharedEstimableVisitor = (context: TransformContext, ...ourArguments: Array<any>) => EstimableVisitor;
 
 export type EstimableVisitor = (isEstimate: boolean) => Visitor;
 

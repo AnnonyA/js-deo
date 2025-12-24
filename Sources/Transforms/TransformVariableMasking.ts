@@ -1,4 +1,4 @@
-import { transformFunctionLengthSetterRemoval, type Transform } from "./Transform";
+import { transformFunctionLength, type Transform } from "./Transform";
 import type { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { isNumericLiteralOrMinusNumericUnaryExpression, numericLiteralOrMinusNumericUnaryExpressionToValue } from "./TransformControlFlowFlattening";
@@ -45,6 +45,27 @@ export const containerContainsExpression = (containerPath: NodePath, targetNode:
 
     return found;
 };
+
+export function isForLoopInitializer(path: NodePath):
+    path is NodePath & (
+        | {
+            parent: t.ForStatement;
+            parentPath: NodePath<t.ForStatement>;
+            key: "init";
+        }
+        | {
+            parent: t.ForXStatement;
+            parentPath: NodePath<t.ForXStatement>;
+            key: "left";
+        }
+    ) {
+    const { parentPath, key } = path;
+
+    return (
+        (parentPath.isForStatement() && key === "init") ||
+        (parentPath.isForXStatement() && key === "left")
+    );
+}
 
 export default {
     name: "VariableMasking",
@@ -97,11 +118,11 @@ export default {
                                 if (innerRestParamArgumentNameBinding !== restParamArgumentNameBinding)
                                     return;
 
-                                const { parentPath: innerPathParentPath } = innerPath;
+                                const { parentPath: innerParentPath } = innerPath;
 
                                 const isWrite =
-                                    innerPathParentPath.isAssignmentExpression() &&
-                                    innerPathParentPath.get("left") === innerPath;
+                                    innerParentPath.isAssignmentExpression() &&
+                                    innerParentPath.get("left") === innerPath;
 
                                 const isLengthWritePropertyKey =
                                     (name: string) =>
@@ -116,7 +137,7 @@ export default {
                                         argumentsMemberKey = innerProperty.value;
 
                                         if (isLengthWritePropertyKey(argumentsMemberKey)) {
-                                            pathsToRemove.push(innerPathParentPath.parentPath);
+                                            pathsToRemove.push(innerParentPath.parentPath);
 
                                             return;
                                         }
@@ -126,7 +147,7 @@ export default {
                                         return;
                                 else if (t.isIdentifier(innerProperty)) {
                                     if (isLengthWritePropertyKey(innerProperty.name)) {
-                                        pathsToRemove.push(innerPathParentPath.parentPath);
+                                        pathsToRemove.push(innerParentPath.parentPath);
 
                                         return;
                                     }
@@ -139,10 +160,10 @@ export default {
                                     let type: ArgumentsMemberType = "param";
 
                                     if (isWrite) {
-                                        const innerPathParentRightPath = innerPathParentPath.get("right");
+                                        const innerParentPathRightPath = innerParentPath.get("right");
 
                                         // If the assignment doesn't reference itself, it's a variable
-                                        if (!containerContainsExpression(innerPathParentRightPath, innerNode))
+                                        if (!containerContainsExpression(innerParentPathRightPath, innerNode))
                                             type = "variable";
                                         else if (isNotEstimate)
                                             console.log(`Arguments member key ${argumentsMemberKey} self referencing, decided as parameter`);
@@ -163,8 +184,8 @@ export default {
 
                                 if (argumentsMember.type === "variable" && isWrite)
                                     if (!argumentsMember.assignmentPath)
-                                        if (innerPathParentPath.isAssignmentExpression())
-                                            argumentsMember.assignmentPath = innerPathParentPath;
+                                        if (innerParentPath.isAssignmentExpression())
+                                            argumentsMember.assignmentPath = innerParentPath;
                             },
                         });
 
@@ -262,8 +283,8 @@ export default {
 
                             if (variableAssignmentPath) {
                                 const {
-                                    parentPath: variableAssignmentPathParentPath,
                                     node: variableAssignmentPathNode,
+                                    parentPath: variableAssignmentPathParentPath,
                                 } = variableAssignmentPath;
 
                                 const newDeclaration = t.variableDeclaration("let", [
@@ -277,11 +298,7 @@ export default {
                                     variableAssignmentPathParentPath.replaceWith(newDeclaration);
 
                                     merged = true;
-                                } else if (
-                                    // TODO: guess there's more
-                                    (variableAssignmentPathParentPath.isForStatement() && variableAssignmentPath.key === "init") ||
-                                    (variableAssignmentPathParentPath.isForXStatement() && variableAssignmentPath.key === "left")
-                                ) {
+                                } else if (isForLoopInitializer(variableAssignmentPath)) {
                                     variableAssignmentPath.replaceWith(newDeclaration);
 
                                     merged = true;
@@ -297,11 +314,14 @@ export default {
                             }
                         }
 
-                        if (declarationsToPrepend.length > 0)
-                            if (t.isBlockStatement(node.body))
-                                node.body.body.unshift(
+                        if (declarationsToPrepend.length > 0) {
+                            const { body } = node;
+
+                            if (t.isBlockStatement(body))
+                                body.body.unshift(
                                     t.variableDeclaration("let", declarationsToPrepend),
                                 );
+                        }
 
                         context.targetCount--;
                     } else
@@ -310,7 +330,7 @@ export default {
             };
         },
         pre: null,
-        post: transformFunctionLengthSetterRemoval(context),
+        post: transformFunctionLength(context, false),
 
         first: null,
         final: null,

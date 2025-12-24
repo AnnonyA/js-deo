@@ -1,5 +1,5 @@
 import { restoreVariableDeclaratorInit } from "./String/TransformStringConcealing";
-import { transformFunctionLengthSetterRemoval, type Transform } from "./Transform";
+import { transformFunctionLength, type Transform } from "./Transform";
 import * as t from "@babel/types";
 
 const enum PseudoFlattenGetterType {
@@ -50,21 +50,21 @@ export default {
                         ))
                             return;
 
-                        const bodyFirstStatementPathDeclarationsPath = bodyFirstStatementPath.get("declarations");
-                        if (bodyFirstStatementPathDeclarationsPath.length !== 1)
+                        const bodyFirstStatementDeclarationsPath = bodyFirstStatementPath.get("declarations");
+                        if (bodyFirstStatementDeclarationsPath.length !== 1)
                             return;
 
-                        const { 0: bodyFirstStatementPathDeclaration } = bodyFirstStatementPathDeclarationsPath;
+                        const { 0: bodyFirstStatementDeclarationPath } = bodyFirstStatementDeclarationsPath;
 
-                        if (!restoreVariableDeclaratorInit(bodyFirstStatementPathDeclaration))
+                        if (!restoreVariableDeclaratorInit(bodyFirstStatementDeclarationPath))
                             return;
 
-                        const bodyFirstStatementPathDeclarationInit = bodyFirstStatementPathDeclaration.get("init");
-                        if (!bodyFirstStatementPathDeclarationInit.isObjectExpression())
+                        const bodyFirstStatementDeclarationPathInit = bodyFirstStatementDeclarationPath.get("init");
+                        if (!bodyFirstStatementDeclarationPathInit.isObjectExpression())
                             return;
 
-                        const { node: { properties: bodyFirstStatementDeclarationInitProperties } } =
-                            bodyFirstStatementPathDeclarationInit;
+                        const { node: { properties: bodyFirstStatementDeclarationPathInitProperties } } =
+                            bodyFirstStatementDeclarationPathInit;
 
                         const { argument: bodyLastStatementArgument } = bodyLastStatement;
 
@@ -91,8 +91,9 @@ export default {
 
                         const keyToPseudoEntry = new Map<string, PseudoFlattenEntry>;
 
-                        bodyFirstStatementDeclarationInitProperties.forEach(property => {
-                            if (!t.isObjectMethod(property)) return;
+                        bodyFirstStatementDeclarationPathInitProperties.forEach(property => {
+                            if (!t.isObjectMethod(property))
+                                return;
 
                             let propertyKey: string;
 
@@ -288,14 +289,18 @@ export default {
                             node.params =
                                 bodyLastStatementArgumentCalleeNameBindingNodeFirstParam.elements.filter(t.isFunctionParameter);
 
+                            const { params, body } = node;
+
                             if (
-                                node.body.directives.length > 0 &&
-                                node.params.length === 1 &&
-                                t.isRestElement(node.params[0])
+                                body.directives.length > 0 &&
+                                params.length === 1 &&
+                                t.isRestElement(params[0])
                             ) // We actually not having "use strict" if parameter is the spread
-                                node.body.directives = node.body.directives.filter(
-                                    ({ value: { value } }) => value !== "use strict",
-                                );
+                                body.directives =
+                                    body.directives.filter(
+                                        ({ value: { value } }) =>
+                                            value !== "use strict",
+                                    );
 
                             [ // Copy special flags
                                 node.async,
@@ -307,12 +312,6 @@ export default {
                                 ];
 
                             bodyLastStatementArgumentCalleeNameBindingPath.remove();
-
-                            { // Recrawl prgoram scope
-                                const { scope: programScope } = path.findParent(({ node }) => t.isProgram(node));
-
-                                programScope.crawl();
-                            }
 
                             console.log("Restored flattened function");
 
@@ -328,7 +327,7 @@ export default {
                 };
             },
             pre: null,
-            post: transformFunctionLengthSetterRemoval(context),
+            post: transformFunctionLength(context, false),
 
             first: null,
             final: null,

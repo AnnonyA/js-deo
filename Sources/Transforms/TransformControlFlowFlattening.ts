@@ -80,25 +80,27 @@ type NumericLiteralOrMinusNumericUnaryExpression = t.NumericLiteral | (t.UnaryEx
     };
 });
 
-export const numericLiteralOrMinusNumericUnaryExpressionToValue = (node: NumericLiteralOrMinusNumericUnaryExpression): number =>
-    t.isNumericLiteral(node)
-        ? node.value
-        : (
-            (
-                t.isUnaryExpression(node) &&
-                t.isNumericLiteral(node.argument) &&
-                node.operator === "-"
-            )
-                ? -node.argument.value
-                : 0
-        );
+export const numericLiteralOrMinusNumericUnaryExpressionToValue =
+    (node: NumericLiteralOrMinusNumericUnaryExpression): number =>
+        t.isNumericLiteral(node)
+            ? node.value
+            : (
+                (
+                    t.isUnaryExpression(node) &&
+                    t.isNumericLiteral(node.argument) &&
+                    node.operator === "-"
+                )
+                    ? -node.argument.value
+                    : 0
+            );
 
-export const isNumericLiteralOrMinusNumericUnaryExpression = (node: t.Node): node is NumericLiteralOrMinusNumericUnaryExpression =>
-    t.isNumericLiteral(node) || (
-        t.isUnaryExpression(node) &&
-        t.isNumericLiteral(node.argument) &&
-        node.operator === "-"
-    );
+export const isNumericLiteralOrMinusNumericUnaryExpression =
+    (node: t.Node): node is NumericLiteralOrMinusNumericUnaryExpression =>
+        t.isNumericLiteral(node) || (
+            t.isUnaryExpression(node) &&
+            t.isNumericLiteral(node.argument) &&
+            node.operator === "-"
+        );
 
 function findNextNonEmptyFlow(
     flows: Array<Flow>,
@@ -121,13 +123,14 @@ function findNextNonEmptyFlow(
     return null;
 }
 
-const isConstantHolderAssignmentPatternParam = (param: t.FunctionParameter): param is t.AssignmentPattern & {
-    left: t.Identifier;
-    right: t.ObjectExpression;
-} =>
-    t.isAssignmentPattern(param) &&
-    t.isIdentifier(param.left) &&
-    t.isObjectExpression(param.right);
+const isConstantHolderAssignmentPatternParam =
+    (param: t.FunctionParameter): param is t.AssignmentPattern & {
+        left: t.Identifier;
+        right: t.ObjectExpression;
+    } =>
+        t.isAssignmentPattern(param) &&
+        t.isIdentifier(param.left) &&
+        t.isObjectExpression(param.right);
 
 export default {
     name: "ControlFlowFlattening",
@@ -169,8 +172,8 @@ export default {
                         }
                     }
 
-                    const flowPositionParams = params.slice(0, paramsLength - 1);
-                    const constantHolderParam = params[paramsLength - 1];
+                    const flowPositionParams = params.slice(0, paramsLength - 1),
+                        constantHolderParam = params[paramsLength - 1];
 
                     const nameBindingParent = parentScope.getBinding(name);
                     if (!nameBindingParent)
@@ -178,16 +181,16 @@ export default {
 
                     const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
 
-                    const cffStartFunction =
+                    const cffStartCallChild =
                         nameBindingParentReferencePaths
                             .find(({ parent: innerParent }) =>
                                 t.isCallExpression(innerParent) &&
                                 innerParent.arguments.length === flowPositionParams.length,
                             ) as NodePath & { parent: t.CallExpression };
-                    if (!cffStartFunction)
+                    if (!cffStartCallChild)
                         return;
 
-                    const { parent: cffStartCall } = cffStartFunction;
+                    const { parent: cffStartCall } = cffStartCallChild;
 
                     if (!(
                         flowPositionParams.every(t.isIdentifier) &&
@@ -195,7 +198,7 @@ export default {
                     ))
                         return;
 
-                    const resultVariableDeclaration = cffStartFunction.findParent(({ node }) => t.isVariableDeclaration(node));
+                    const resultVariableDeclaration = cffStartCallChild.findParent(({ node }) => t.isVariableDeclaration(node));
 
                     let cffShouldReturnValueDeclarationName: string;
 
@@ -525,7 +528,9 @@ export default {
 
                     const dynamicallyComputeFlows = (
                         flows: Array<Flow>,
+
                         literalConstants: LiteralConstants,
+
                         flowPositions: FlowPositions,
                     ) =>
                         flows.map(ourCase => {
@@ -566,6 +571,7 @@ export default {
 
                     const stepLiteralConstants = (
                         statements: Array<t.Statement>,
+
                         literalConstants: LiteralConstants,
                     ) => {
                         statements.forEach(statement => {
@@ -593,6 +599,7 @@ export default {
 
                     const stepFlowPositions = (
                         statements: Array<t.Statement>,
+
                         flowPositions: FlowPositions,
                     ) => {
                         statements.forEach(statement => {
@@ -820,7 +827,9 @@ export default {
 
                     const computeNextFlowState = (
                         literalConstants: LiteralConstants,
+
                         flowPositions: FlowPositions,
+
                         flowWithContext: FlowWithContext,
                     ): FlowState | null => {
                         const flowPositionsSum = summateFlowPositions(flowPositions);

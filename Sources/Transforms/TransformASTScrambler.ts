@@ -66,7 +66,11 @@ export default {
                                     const { arguments: ownArguments } = innerExpression;
 
                                     const argumentsFlattened =
-                                        ownArguments.map(argument => t.expressionStatement(argument as t.Expression));
+                                        ownArguments.map(
+                                            argument =>
+                                                t.isExpression(argument) &&
+                                                t.expressionStatement(argument),
+                                        );
 
                                     innerPath.replaceWithMultiple(argumentsFlattened);
 

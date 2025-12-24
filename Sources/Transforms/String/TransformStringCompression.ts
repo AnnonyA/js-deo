@@ -119,10 +119,13 @@ export default {
 
                     const { id: { name: thirdStatementDeclarationName } } = thirdStatementDeclaration;
 
-                    const isFourthStatementExpression = t.isExpressionStatement(fourthStatement);
-                    const isFourthStatementReturn = t.isReturnStatement(fourthStatement);
+                    const isFourthStatementExpression = t.isExpressionStatement(fourthStatement),
+                        isFourthStatementReturn = t.isReturnStatement(fourthStatement);
 
-                    if (!(isFourthStatementExpression || (isFourthStatementReturn && fourthStatement.argument)))
+                    if (!(
+                        isFourthStatementExpression ||
+                        (isFourthStatementReturn && fourthStatement.argument)
+                    ))
                         return;
 
                     const fourthStatementExpressionOrReturn =
@@ -131,7 +134,11 @@ export default {
                     if (!t.isAssignmentExpression(fourthStatementExpressionOrReturn))
                         return;
 
-                    const { left: fourthStatementExpressionLeft, right: fourthStatementExpressionRight } = fourthStatementExpressionOrReturn;
+                    const {
+                        left: fourthStatementExpressionLeft,
+                        right: fourthStatementExpressionRight,
+                    } = fourthStatementExpressionOrReturn;
+
                     if (!t.isFunctionExpression(fourthStatementExpressionRight))
                         return;
 
