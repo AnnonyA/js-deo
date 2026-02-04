@@ -17,19 +17,20 @@ import transformDuplicateLiteralsRemoval from "./TransformDuplicateLiteralsRemov
 import transformVariableMasking from "./TransformVariableMasking";
 import transformStringCompression from "./String/TransformStringCompression";
 import transformStringConcealing from "./String/TransformStringConcealing";
+import transformStringSplitting from "./TransformStringSplitting";
 import transformOpaquePredicates from "./TransformOpaquePredicates";
 import transformGlobalConcealing from "./TransformGlobalConcealing";
 import transformCalculator from "./TransformCalculator";
 import transformDeadCode from "./TransformDeadCode";
 import transformDispatcher from "./TransformDispatcher";
 import transformFlatten from "./TransformFlatten";
+import transformObjectExtraction from "./TransformObjectExtraction";
 import transformPreparation from "./TransformPreparation";
 
 // TODO: movedDeclarations can be reversed by using the same method as variableMasking
 
 /*
   Irreversible transforms:
-    objectExtraction
     renameVariables
     renameLabels
 */
@@ -46,12 +47,14 @@ export const ALL_TRANSFORMS: ReadonlyArray<Transform> = [
     transformVariableMasking,
     transformStringCompression,
     transformStringConcealing,
+    transformStringSplitting,
     transformOpaquePredicates,
     transformGlobalConcealing,
     transformCalculator,
     transformDeadCode,
     transformDispatcher,
     transformFlatten,
+    transformObjectExtraction,
     transformPreparation,
 ];
 
