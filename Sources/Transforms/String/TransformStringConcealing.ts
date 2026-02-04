@@ -138,77 +138,86 @@ export default {
 
                     const { left: { argument: { object: { name: cacheObjectName } } } } = firstBodyStatementTest;
 
+                    const getSingleStatementFromBranch = (statement: t.Statement | t.BlockStatement) => {
+                        if (t.isBlockStatement(statement))
+                            return statement.body.length === 1 ? statement.body[0] : null;
+
+                        return statement;
+                    };
+
+                    const getCacheIndexReturnArgument = (statement: t.Statement | null) => {
+                        if (!statement)
+                            return null;
+
+                        const returnStatement =
+                            t.isReturnStatement(statement) ? statement : null;
+
+                        if (!returnStatement || !returnStatement.argument)
+                            return null;
+
+                        const { argument } = returnStatement;
+
+                        if (!(
+                            t.isMemberExpression(argument, { computed: true }) &&
+                            t.isIdentifier(argument.object, { name: cacheObjectName }) &&
+                            t.isIdentifier(argument.property, { name: indexParamName })
+                        ))
+                            return null;
+
+                        return argument;
+                    };
+
+                    const getCacheAssignmentArgument = (statement: t.Statement | null) => {
+                        if (!statement)
+                            return null;
+
+                        const assignmentExpression =
+                            t.isReturnStatement(statement) && statement.argument
+                                ? statement.argument
+                                : t.isExpressionStatement(statement)
+                                    ? statement.expression
+                                    : null;
+
+                        if (!assignmentExpression || !t.isAssignmentExpression(assignmentExpression))
+                            return null;
+
+                        if (!(
+                            t.isMemberExpression(assignmentExpression.left, { computed: true }) &&
+                            t.isIdentifier(assignmentExpression.left.object, { name: cacheObjectName }) &&
+                            t.isIdentifier(assignmentExpression.left.property, { name: indexParamName })
+                        ))
+                            return null;
+
+                        return assignmentExpression;
+                    };
+
                     if (isPattern1) {
                         const { 1: secondBodyStatement } = body;
 
-                        if (!(
-                            t.isReturnStatement(secondBodyStatement) &&
-                            secondBodyStatement.argument
-                        ))
-                            return;
-
-                        const { argument: secondBodyStatementArgument } = secondBodyStatement;
-
-                        if (!(
-                            t.isMemberExpression(secondBodyStatementArgument, { computed: true }) &&
-                            t.isIdentifier(secondBodyStatementArgument.object, { name: cacheObjectName }) &&
-                            t.isIdentifier(secondBodyStatementArgument.property, { name: indexParamName })
-                        ))
+                        if (!getCacheIndexReturnArgument(getSingleStatementFromBranch(secondBodyStatement)))
                             return;
                     } else if (isPattern2) {
                         const { alternate } = firstBodyStatement;
 
-                        if (!t.isBlockStatement(alternate))
+                        if (!alternate)
                             return;
 
-                        const { body: alternateBody } = alternate;
-
-                        if (alternateBody.length !== 1)
-                            return;
-
-                        const { 0: alternateBodyStatement } = alternateBody;
-
-                        if (!(
-                            t.isReturnStatement(alternateBodyStatement) &&
-                            alternateBodyStatement.argument
-                        ))
-                            return;
-
-                        const { argument: alternateBodyStatementArgument } = alternateBodyStatement;
-
-                        if (!(
-                            t.isMemberExpression(alternateBodyStatementArgument, { computed: true }) &&
-                            t.isIdentifier(alternateBodyStatementArgument.object, { name: cacheObjectName }) &&
-                            t.isIdentifier(alternateBodyStatementArgument.property, { name: indexParamName })
-                        ))
+                        if (!getCacheIndexReturnArgument(getSingleStatementFromBranch(alternate)))
                             return;
                     }
 
                     const { consequent: firstBodyStatementConsequent } = firstBodyStatement;
 
-                    if (!t.isBlockStatement(firstBodyStatementConsequent)) // TODO: handle if firstBodyStatementConsequent is expression
+                    const firstBodyStatementConsequentBodyStatement =
+                        getSingleStatementFromBranch(firstBodyStatementConsequent);
+
+                    const firstBodyStatementConsequentBodyStatementArgument =
+                        getCacheAssignmentArgument(firstBodyStatementConsequentBodyStatement);
+
+                    if (!firstBodyStatementConsequentBodyStatementArgument)
                         return;
-
-                    const { body: firstBodyStatementConsequentBody } = firstBodyStatementConsequent;
-
-                    if (firstBodyStatementConsequentBody.length !== 1)
-                        return;
-
-                    const { 0: firstBodyStatementConsequentBodyStatement } = firstBodyStatementConsequentBody;
 
                     if (!(
-                        t.isReturnStatement(firstBodyStatementConsequentBodyStatement) &&
-                        firstBodyStatementConsequentBodyStatement.argument
-                    ))
-                        return;
-
-                    const { argument: firstBodyStatementConsequentBodyStatementArgument } = firstBodyStatementConsequentBodyStatement;
-
-                    if (!(
-                        t.isAssignmentExpression(firstBodyStatementConsequentBodyStatementArgument) &&
-                        t.isMemberExpression(firstBodyStatementConsequentBodyStatementArgument.left, { computed: true }) &&
-                        t.isIdentifier(firstBodyStatementConsequentBodyStatementArgument.left.object, { name: cacheObjectName }) &&
-                        t.isIdentifier(firstBodyStatementConsequentBodyStatementArgument.left.property, { name: indexParamName }) &&
                         t.isCallExpression(firstBodyStatementConsequentBodyStatementArgument.right) &&
                         t.isIdentifier(firstBodyStatementConsequentBodyStatementArgument.right.callee) &&
                         firstBodyStatementConsequentBodyStatementArgument.right.arguments.length === 1 &&
@@ -257,6 +266,14 @@ export default {
                         return;
 
                     const stringArrayValued = stringArrayNameBindingNode.init.elements.map(element => element.value);
+
+                    const cacheObjectNameBinding = scope.getBinding(cacheObjectName);
+                    if (cacheObjectNameBinding) {
+                        const { path: cacheObjectNameBindingPath } = cacheObjectNameBinding;
+
+                        if (cacheObjectNameBindingPath.isVariableDeclarator())
+                            restoreVariableDeclaratorInit(cacheObjectNameBindingPath);
+                    }
 
                     const decodeFunctionNameBinding = scope.getBinding(decodeFunctionName);
                     if (!decodeFunctionNameBinding)
