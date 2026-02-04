@@ -26,6 +26,7 @@ import transformDispatcher from "./TransformDispatcher";
 import transformFlatten from "./TransformFlatten";
 import transformObjectExtraction from "./TransformObjectExtraction";
 import transformPreparation from "./TransformPreparation";
+import transformRenameLabels from "./TransformRenameLabels";
 
 // TODO: movedDeclarations can be reversed by using the same method as variableMasking
 
@@ -55,6 +56,7 @@ export const ALL_TRANSFORMS: ReadonlyArray<Transform> = [
     transformDispatcher,
     transformFlatten,
     transformObjectExtraction,
+    transformRenameLabels,
     transformPreparation,
 ];
 
