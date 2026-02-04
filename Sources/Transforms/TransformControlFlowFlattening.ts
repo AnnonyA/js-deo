@@ -72,6 +72,11 @@ interface InnerCFFCallOneself {
     // With context and literal constants is dynamic, but object is static. So we'll handle this in the code
 }
 
+interface ReTraversalState {
+    depth: number;
+    remaining: number;
+}
+
 type LiteralConstants = Record<string, number>;
 
 type NumericLiteralOrMinusNumericUnaryExpression = t.NumericLiteral | (t.UnaryExpression & {
@@ -132,6 +137,9 @@ const isConstantHolderAssignmentPatternParam =
         t.isIdentifier(param.left) &&
         t.isObjectExpression(param.right);
 
+const MAX_NESTED_CFF_DEPTH = 3;
+const MAX_NESTED_CFF_COUNT = 25;
+
 export default {
     name: "ControlFlowFlattening",
     preRunWebcrack: false,
@@ -139,9 +147,18 @@ export default {
     contextedVisitor: context => ({
         on(isEstimate) {
             const isNotEstimate = !isEstimate;
+            const createReTraversalState = (): ReTraversalState => ({
+                depth: MAX_NESTED_CFF_DEPTH,
+                remaining: MAX_NESTED_CFF_COUNT,
+            });
 
             return {
                 FunctionDeclaration(path) {
+                    const reTraversalState = createReTraversalState();
+                    const handleFunctionDeclaration = (
+                        path: NodePath<t.FunctionDeclaration>,
+                        reTraversalState: ReTraversalState,
+                    ) => {
                     const {
                         node,
                         parentPath: { scope: parentScope },
@@ -704,7 +721,7 @@ export default {
                                         { // Do grouped reconstruction
                                             console.group();
 
-                                            const reconstructedBody = reconstructBlock(
+                                            const nestedReconstructedBody = reconstructAndProcessNestedCff(
                                                 structuredClone(literalConstants),
 
                                                 innerFlowPositions,
@@ -712,7 +729,7 @@ export default {
                                                 defaultFlowWithContext,
                                             );
 
-                                            console.log(generate(t.blockStatement(finalizeFlowStatements(reconstructedBody))).code);
+                                            console.log(generate(t.blockStatement(finalizeFlowStatements(nestedReconstructedBody))).code);
 
                                             console.groupEnd();
                                         }
@@ -1156,6 +1173,54 @@ export default {
                         return blockBody;
                     };
 
+                    const retraverseBlockForNestedCff = (blockBody: Array<t.Statement>) => {
+                        if (reTraversalState.depth <= 0 || reTraversalState.remaining <= 0)
+                            return blockBody;
+
+                        const nextState: ReTraversalState = {
+                            depth: reTraversalState.depth - 1,
+                            remaining: reTraversalState.remaining,
+                        };
+
+                        const program = t.file(t.program(blockBody));
+
+                        traverse(program, {
+                            FunctionDeclaration(innerPath) {
+                                if (!innerPath.node.generator)
+                                    return;
+
+                                if (nextState.remaining <= 0)
+                                    return;
+
+                                nextState.remaining--;
+
+                                handleFunctionDeclaration(innerPath, nextState);
+                            },
+                        });
+
+                        reTraversalState.remaining = nextState.remaining;
+
+                        return program.program.body;
+                    };
+
+                    const reconstructAndProcessNestedCff = (
+                        literalConstants: LiteralConstants,
+
+                        flowPositions: FlowPositions,
+
+                        flowWithContext: FlowWithContext,
+                    ) => {
+                        const reconstructedBody = reconstructBlock(
+                            literalConstants,
+
+                            flowPositions,
+
+                            flowWithContext,
+                        );
+
+                        return retraverseBlockForNestedCff(reconstructedBody);
+                    };
+
                     if (isNotEstimate) {
                         const literalConstants: LiteralConstants = {};
 
@@ -1173,7 +1238,7 @@ export default {
                             path.findParent(path => path.isBlock()) as NodePath<t.Block>;
 
                         // Finally we can replace body
-                        blockParentNode.body = reconstructBlock(
+                        const reconstructedBody = reconstructAndProcessNestedCff(
                             literalConstants,
 
                             flowPositions,
@@ -1181,9 +1246,14 @@ export default {
                             defaultFlowWithContext,
                         );
 
+                        blockParentNode.body = reconstructedBody;
+
                         context.targetCount--;
                     } else
                         context.targetCount++;
+                    };
+
+                    handleFunctionDeclaration(path, reTraversalState);
                 },
             };
         },
