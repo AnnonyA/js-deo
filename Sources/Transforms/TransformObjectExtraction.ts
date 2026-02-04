@@ -139,12 +139,12 @@ export default {
                         )],
                     );
 
-                    const newDeclarationPath = statementPath.replaceWith(objectDeclaration) as NodePath<t.VariableDeclaration>;
+                    statementPath.replaceWith(objectDeclaration);
 
                     for (let removeIndex = j - 1; removeIndex > i; removeIndex--)
                         bodyPaths[removeIndex].remove();
 
-                    scope.registerDeclaration(newDeclarationPath);
+                    scope.crawl();
 
                     console.log("Reconstructed extracted object:", base);
 
