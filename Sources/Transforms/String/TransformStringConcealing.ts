@@ -1,228 +1,407 @@
 import type { Transform } from "../Transform";
 import * as t from "@babel/types";
-import { decompressFromUTF16 } from "lz-string";
+import type { NodePath } from "@babel/traverse";
+
+export const isOperatorJsConfuserSlowAssignmentOperator =
+    (operator: t.AssignmentExpression["operator"]): operator is "=" | "||=" =>
+        operator === "=" || operator === "||=";
+
+/**
+ * Restores init of VariableDeclarator.
+ * 
+ * @remarks
+ * Unsafe.
+ */
+export function restoreVariableDeclaratorInit(varaibleDeclaratorPath: NodePath<t.VariableDeclarator>):
+    varaibleDeclaratorPath is NodePath<t.VariableDeclarator & {
+        id: t.Identifier;
+        init: t.Node;
+    }> {
+    const { node, scope } = varaibleDeclaratorPath;
+
+    if (node.init)
+        return true;
+
+    const { id } = node;
+
+    if (!t.isIdentifier(id))
+        return false;
+
+    const { name } = id;
+
+    const nameBinding = scope.getBinding(name);
+    if (!nameBinding)
+        return false;
+
+    const { constantViolations: nameBindingConstantViolations } = nameBinding;
+
+    for (const constantViolation of nameBindingConstantViolations) {
+        if (!constantViolation.isAssignmentExpression())
+            continue;
+
+        const { node: constantViolationNode } = constantViolation;
+
+        if (!isOperatorJsConfuserSlowAssignmentOperator(constantViolationNode.operator))
+            continue;
+
+        varaibleDeclaratorPath.get("init")
+            .replaceWith(constantViolationNode.right);
+
+        // We don't need slow-assignment anymore
+        constantViolation.remove();
+
+        return true;
+    }
+
+    return false;
+}
 
 export default {
-    name: "StringCompression",
+    name: "StringConcealing",
     preRunWebcrack: false,
-    postRunWebcrack: true,
+    postRunWebcrack: true, // Simplify StringSplitting
     contextedVisitor: context => ({
         on(isEstimate) {
             const isNotEstimate = !isEstimate;
 
+            const decodedCache = new Map<number, string>;
+
             return {
-                // TODO: remove library code and string get function too
-
-                CallExpression(path) {
-                    const { node: { callee } } = path;
-
-                    if (!t.isFunctionExpression(callee))
-                        return;
-
-                    const { body: { body } } = callee;
-
-                    if (body.length !== 4)
-                        return;
-
-                    const {
-                        0: firstStatement,
-                        1: secondStatement,
-                        2: thirdStatement,
-                        3: fourthStatement,
-                    } = body;
-
-                    // First statement
-
-                    if (!(
-                        t.isVariableDeclaration(firstStatement) &&
-                        firstStatement.declarations.length === 1
-                    ))
-                        return;
-
-                    const { 0: firstStatementDeclaration } = firstStatement.declarations;
-
-                    if (!(
-                        firstStatementDeclaration.init &&
-                        t.isStringLiteral(firstStatementDeclaration.init) &&
-                        t.isIdentifier(firstStatementDeclaration.id)
-                    ))
-                        return;
+                FunctionDeclaration(path) {
+                    /*
+                        Pattern 1:
+                        function __p_fp7u_STR_41(index) {
+                          if (typeof __p_mxd8_cache[index] === 'undefined') {
+                            return __p_mxd8_cache[index] = __p_fp7u_STR_41_decode(__p_jioc_array[index]);
+                          }
+                          return __p_mxd8_cache[index];
+                        }
+                        
+                        Pattern 2:
+                        function __p_6Xea_STR_25(index) {
+                            if (typeof __p_WEDx_cache[index] === 'undefined') {
+                              return __p_WEDx_cache[index] = __p_6Xea_STR_25_decode(__p_kWSL_array[index]);
+                            } else {
+                              return __p_WEDx_cache[index];
+                            }
+                        }
+                    */
 
                     const {
-                        id: { name: firstStatementDeclarationName },
-                        init: { value: encodedDelimitedStringValue },
-                    } = firstStatementDeclaration;
-
-                    // Second statement
-
-                    if (!(
-                        t.isVariableDeclaration(secondStatement) &&
-                        secondStatement.declarations.length === 1
-                    ))
-                        return;
-
-                    const { declarations: { 0: secondStatementDeclaration } } = secondStatement;
-
-                    if (!t.isIdentifier(secondStatementDeclaration.id))
-                        return;
-
-                    if (!t.isCallExpression(secondStatementDeclaration.init))
-                        return;
-
-                    const { init: { callee: secondStatementDeclarationCallee, arguments: secondArguments } } = secondStatementDeclaration;
-
-                    if (!t.isMemberExpression(secondStatementDeclarationCallee))
-                        return;
-
-                    if (!t.isIdentifier(secondStatementDeclarationCallee.property, { name: "decompressFromUTF16" }))
-                        return;
-
-                    if (!t.isIdentifier(secondArguments[0], { name: firstStatementDeclarationName }))
-                        return;
-
-                    // Third statement
-
-                    const { id: { name: secondStatementDeclarationName } } = secondStatementDeclaration;
-
-                    if (!(
-                        t.isVariableDeclaration(thirdStatement) &&
-                        thirdStatement.declarations.length === 1
-                    ))
-                        return;
-
-                    const { declarations: { 0: thirdStatementDeclaration } } = thirdStatement;
-
-                    if (!t.isIdentifier(thirdStatementDeclaration.id))
-                        return;
-
-                    if (!t.isCallExpression(thirdStatementDeclaration.init))
-                        return;
-
-                    const { init: { callee: thirdStatementDeclarationCallee, arguments: thirdArguments } } = thirdStatementDeclaration;
-
-                    if (!t.isMemberExpression(thirdStatementDeclarationCallee))
-                        return;
-
-                    if (!t.isIdentifier(thirdStatementDeclarationCallee.object, { name: secondStatementDeclarationName }))
-                        return;
-
-                    if (!t.isIdentifier(thirdStatementDeclarationCallee.property, { name: "split" }))
-                        return;
-
-                    const { 0: stringDelimiter } = thirdArguments;
-                    if (!t.isStringLiteral(stringDelimiter))
-                        return;
-
-                    const { value: stringDelimiterValue } = stringDelimiter;
-
-                    // Fourth statement
-
-                    const { id: { name: thirdStatementDeclarationName } } = thirdStatementDeclaration;
-
-                    const isFourthStatementExpression = t.isExpressionStatement(fourthStatement),
-                        isFourthStatementReturn = t.isReturnStatement(fourthStatement);
-
-                    if (!(
-                        isFourthStatementExpression ||
-                        (isFourthStatementReturn && fourthStatement.argument)
-                    ))
-                        return;
-
-                    const fourthStatementExpressionOrReturn =
-                        fourthStatement[isFourthStatementExpression ? "expression" : "argument"];
-
-                    if (!t.isAssignmentExpression(fourthStatementExpressionOrReturn))
-                        return;
-
-                    const {
-                        left: fourthStatementExpressionLeft,
-                        right: fourthStatementExpressionRight,
-                    } = fourthStatementExpressionOrReturn;
-
-                    if (!t.isFunctionExpression(fourthStatementExpressionRight))
-                        return;
-
-                    if (!t.isIdentifier(fourthStatementExpressionLeft))
-                        return;
-
-                    const { body: { body: fourthStatementExpressionRightBodyBody } } = fourthStatementExpressionRight;
-                    if (!(
-                        fourthStatementExpressionRightBodyBody.length === 1 &&
-                        t.isReturnStatement(fourthStatementExpressionRightBodyBody[0])
-                    ))
-                        return;
-
-                    const { argument: fourthStatementExpressionRightBodyBodyReturnArgument } = fourthStatementExpressionRightBodyBody[0];
-
-                    if (!t.isMemberExpression(fourthStatementExpressionRightBodyBodyReturnArgument))
-                        return;
-
-                    if (!t.isIdentifier(fourthStatementExpressionRightBodyBodyReturnArgument.object, { name: thirdStatementDeclarationName }))
-                        return;
-
-                    const delimitedStringValue = decompressFromUTF16(encodedDelimitedStringValue);
-
-                    const splittedStringValue = delimitedStringValue.split(stringDelimiterValue);
-
-                    const { name: fourthStatementExpressionLeftName } = fourthStatementExpressionLeft;
-
-                    const {
+                        node: {
+                            id: { name },
+                            params,
+                            body: { body },
+                        },
                         scope,
                         parentPath: { scope: parentScope },
                     } = path;
 
-                    const fourthStatementExpressionLeftNameBindingParent =
-                        parentScope.getBinding(fourthStatementExpressionLeftName);
-
-                    if (!fourthStatementExpressionLeftNameBindingParent)
+                    if (params.length !== 1)
                         return;
 
-                    const { referencePaths: fourthStatementExpressionLeftNameBindingParentReferencePaths } =
-                        fourthStatementExpressionLeftNameBindingParent;
+                    const { 0: firstParam } = params;
+                    if (!t.isIdentifier(firstParam))
+                        return;
 
-                    let replacedCalls = 0;
+                    const { name: indexParamName } = firstParam;
 
-                    fourthStatementExpressionLeftNameBindingParentReferencePaths
-                        .forEach(path => {
-                            const { parentPath } = path;
+                    if (body.length !== 2 && body.length !== 1)
+                        return;
 
-                            const { node: parentNode } = parentPath;
+                    const { 0: firstBodyStatement } = body;
 
-                            if (
-                                t.isCallExpression(parentNode) &&
-                                parentNode.arguments.length === 1 &&
-                                t.isNumericLiteral(parentNode.arguments[0])
-                            )
-                                if (isNotEstimate) {
-                                    const { value: parentNodeArgumentValue } = parentNode.arguments[0];
+                    if (!t.isIfStatement(firstBodyStatement))
+                        return;
 
-                                    const stringValue = splittedStringValue[parentNodeArgumentValue];
+                    const {
+                        test: firstBodyStatementTest,
+                        alternate: firstBodyStatementAlternate,
+                    } = firstBodyStatement;
 
-                                    parentPath.replaceWith(t.valueToNode(stringValue));
-                                    replacedCalls++;
+                    // Check if this is Pattern 1 or Pattern 2
+                    const isPattern1 = body.length === 2 && !firstBodyStatementAlternate,
+                        isPattern2 = body.length === 1 && !!firstBodyStatementAlternate;
 
-                                    { // Log
-                                        console.log(`Replaced ${fourthStatementExpressionLeftName}(${parentNodeArgumentValue}) => "${stringValue}"`);
-                                    }
+                    if (!(isPattern1 || isPattern2))
+                        return;
 
-                                    context.targetCount--;
-                                } else
-                                    context.targetCount++;
-                        });
+                    if (!(
+                        t.isBinaryExpression(firstBodyStatementTest, { operator: "===" }) &&
+                        t.isUnaryExpression(firstBodyStatementTest.left, { operator: "typeof", prefix: true }) &&
+                        t.isMemberExpression(firstBodyStatementTest.left.argument, { computed: true }) &&
+                        t.isIdentifier(firstBodyStatementTest.left.argument.object) &&
+                        t.isIdentifier(firstBodyStatementTest.left.argument.property, { name: indexParamName }) &&
+                        t.isStringLiteral(firstBodyStatementTest.right, { value: "undefined" })
+                    ))
+                        return;
 
-                    if (isNotEstimate && replacedCalls > 0) {
-                        const fourthStatementExpressionLeftNameBinding =
-                            scope.getBinding(fourthStatementExpressionLeftName);
+                    const { left: { argument: { object: { name: cacheObjectName } } } } = firstBodyStatementTest;
 
-                        if (fourthStatementExpressionLeftNameBinding &&
-                            fourthStatementExpressionLeftNameBinding.referencePaths.length === 0) {
-                            fourthStatementExpressionLeftNameBinding.path.remove();
+                    const getSingleStatementFromBranch = (statement: t.Statement | t.BlockStatement) => {
+                        if (t.isBlockStatement(statement))
+                            return statement.body.length === 1 ? statement.body[0] : null;
 
-                            if (path.parentPath.isExpressionStatement())
-                                path.parentPath.remove();
-                            else
-                                path.remove();
+                        return statement;
+                    };
+
+                    const getCacheIndexReturnArgument = (statement: t.Statement | null) => {
+                        if (!statement)
+                            return null;
+
+                        const returnStatement =
+                            t.isReturnStatement(statement) ? statement : null;
+
+                        if (!returnStatement || !returnStatement.argument)
+                            return null;
+
+                        const { argument } = returnStatement;
+
+                        if (!(
+                            t.isMemberExpression(argument, { computed: true }) &&
+                            t.isIdentifier(argument.object, { name: cacheObjectName }) &&
+                            t.isIdentifier(argument.property, { name: indexParamName })
+                        ))
+                            return null;
+
+                        return argument;
+                    };
+
+                    const getCacheAssignmentArgument = (statement: t.Statement | null) => {
+                        if (!statement)
+                            return null;
+
+                        const assignmentExpression =
+                            t.isReturnStatement(statement) && statement.argument
+                                ? statement.argument
+                                : t.isExpressionStatement(statement)
+                                    ? statement.expression
+                                    : null;
+
+                        if (!assignmentExpression || !t.isAssignmentExpression(assignmentExpression))
+                            return null;
+
+                        if (!(
+                            t.isMemberExpression(assignmentExpression.left, { computed: true }) &&
+                            t.isIdentifier(assignmentExpression.left.object, { name: cacheObjectName }) &&
+                            t.isIdentifier(assignmentExpression.left.property, { name: indexParamName })
+                        ))
+                            return null;
+
+                        return assignmentExpression;
+                    };
+
+                    if (isPattern1) {
+                        const { 1: secondBodyStatement } = body;
+
+                        if (!getCacheIndexReturnArgument(getSingleStatementFromBranch(secondBodyStatement)))
+                            return;
+                    } else if (isPattern2) {
+                        const { alternate } = firstBodyStatement;
+
+                        if (!alternate)
+                            return;
+
+                        if (!getCacheIndexReturnArgument(getSingleStatementFromBranch(alternate)))
+                            return;
+                    }
+
+                    const { consequent: firstBodyStatementConsequent } = firstBodyStatement;
+
+                    const firstBodyStatementConsequentBodyStatement =
+                        getSingleStatementFromBranch(firstBodyStatementConsequent);
+
+                    const firstBodyStatementConsequentBodyStatementArgument =
+                        getCacheAssignmentArgument(firstBodyStatementConsequentBodyStatement);
+
+                    if (!firstBodyStatementConsequentBodyStatementArgument)
+                        return;
+
+                    if (!(
+                        t.isCallExpression(firstBodyStatementConsequentBodyStatementArgument.right) &&
+                        t.isIdentifier(firstBodyStatementConsequentBodyStatementArgument.right.callee) &&
+                        firstBodyStatementConsequentBodyStatementArgument.right.arguments.length === 1 &&
+                        t.isMemberExpression(firstBodyStatementConsequentBodyStatementArgument.right.arguments[0], { computed: true }) &&
+                        t.isIdentifier(firstBodyStatementConsequentBodyStatementArgument.right.arguments[0].object) &&
+                        t.isIdentifier(firstBodyStatementConsequentBodyStatementArgument.right.arguments[0].property, { name: indexParamName })
+                    ))
+                        return;
+
+                    const {
+                        right: {
+                            callee: {
+                                name: decodeFunctionName,
+                            },
+                            arguments: {
+                                0: {
+                                    object: {
+                                        name: stringArrayName,
+                                    },
+                                },
+                            },
+                        },
+                    } = firstBodyStatementConsequentBodyStatementArgument;
+
+                    const stringArrayNameBinding = scope.getBinding(stringArrayName);
+                    if (!stringArrayNameBinding)
+                        return;
+
+                    const { path: stringArrayNameBindingPath } = stringArrayNameBinding;
+
+                    if (!stringArrayNameBindingPath.isVariableDeclarator())
+                        return;
+
+                    // The function is actually changing the value of path, but even in estimate mode, it's safe to be changed
+                    // TODO: we should do this for cache object too
+                    if (!restoreVariableDeclaratorInit(stringArrayNameBindingPath))
+                        return;
+
+                    const { node: stringArrayNameBindingNode } = stringArrayNameBindingPath;
+
+                    if (!(
+                        t.isArrayExpression(stringArrayNameBindingNode.init) &&
+                        stringArrayNameBindingNode.init.elements.length > 0 &&
+                        stringArrayNameBindingNode.init.elements.every(t.isStringLiteral)
+                    ))
+                        return;
+
+                    const stringArrayValued = stringArrayNameBindingNode.init.elements.map(element => element.value);
+
+                    const cacheObjectNameBinding = scope.getBinding(cacheObjectName);
+                    if (cacheObjectNameBinding) {
+                        const { path: cacheObjectNameBindingPath } = cacheObjectNameBinding;
+
+                        if (cacheObjectNameBindingPath.isVariableDeclarator())
+                            restoreVariableDeclaratorInit(cacheObjectNameBindingPath);
+                    }
+
+                    const decodeFunctionNameBinding = scope.getBinding(decodeFunctionName);
+                    if (!decodeFunctionNameBinding)
+                        return;
+
+                    const {
+                        path: decodeFunctionNameBindingPath,
+                        path: { node: decodeFunctionNameBindingNode },
+                    } = decodeFunctionNameBinding;
+
+                    if (!(
+                        t.isFunctionDeclaration(decodeFunctionNameBindingNode) &&
+                        decodeFunctionNameBindingNode.params.length === 1 &&
+                        t.isIdentifier(decodeFunctionNameBindingNode.params[0]) &&
+                        decodeFunctionNameBindingNode.body.body.length > 0
+                    ))
+                        return;
+
+                    // We assume decodeFunctionNameBindingNode is the decode function without analyzing body
+
+                    let tableValue: string;
+
+                    decodeFunctionNameBindingPath.traverse({
+                        StringLiteral(path) { // tableValue is only StringLiteral in the decode function
+                            const { node: { value } } = path;
+
+                            if (value.length === 91) {
+                                tableValue = value;
+
+                                path.stop();
+                            }
+                        },
+                    });
+
+                    if (!tableValue)
+                        return;
+
+                    if (isNotEstimate)
+                        console.log(`Found table: "${tableValue}"`);
+
+                    const innerDecode = (chars: string) => {
+                        const decodedBuffer = new Array<number>;
+
+                        let b = 0,
+                            n = 0,
+                            v = -1;
+
+                        const { length: charsLength } = chars;
+
+                        for (let i = 0; i < charsLength; i++) {
+                            const p = tableValue.indexOf(chars[i]);
+                            if (p === -1)
+                                continue;
+
+                            if (v < 0)
+                                v = p;
+                            else {
+                                v += 91 * p;
+
+                                b |= v << n;
+                                n +=
+                                    (v & 8191) > 88
+                                        ? 13
+                                        : 14;
+
+                                do {
+                                    decodedBuffer.push(b & 0xff);
+
+                                    b >>= 8;
+                                    n -= 8;
+                                } while (n > 7);
+
+                                v = -1;
+                            }
                         }
+
+                        if (v > -1)
+                            decodedBuffer.push((b | (v << n)) & 0xff);
+
+                        return Buffer.from(decodedBuffer).toString("utf-8");
+                    };
+
+                    const decode = (index: number) => {
+                        const indexCachedDecoded = decodedCache.get(index);
+                        if (indexCachedDecoded) {
+                            console.log(`Index ${index} cached: "${indexCachedDecoded}"`);
+
+                            return indexCachedDecoded;
+                        }
+
+                        const decoded = innerDecode(stringArrayValued[index]);
+
+                        console.log(`Index ${index} decoded: "${decoded}"`);
+
+                        decodedCache.set(index, decoded);
+
+                        return decoded;
+                    };
+
+                    const nameBindingParent = parentScope.getBinding(name);
+                    if (!nameBindingParent)
+                        return;
+
+                    const { referencePaths: nameBindingParentReferencePaths } = nameBindingParent;
+
+                    nameBindingParentReferencePaths.forEach(({ parentPath: innerParentPath, parentPath: { node: innerParentNode } }) => {
+                        if (
+                            t.isCallExpression(innerParentNode) &&
+                            innerParentNode.arguments.length === 1 &&
+                            t.isNumericLiteral(innerParentNode.arguments[0])
+                        )
+                            if (isNotEstimate) {
+                                const { value: encodedValue } = innerParentNode.arguments[0];
+
+                                innerParentPath.replaceWith(t.valueToNode(decode(encodedValue)));
+
+                                context.targetCount--;
+                            } else
+                                context.targetCount++;
+                    });
+
+                    if (isNotEstimate) {
+                        decodeFunctionNameBindingPath.remove();
+
+                        // No!
+                        // stringArrayNameBindingPath.remove();
+
+                        path.remove();
                     }
                 },
             };
