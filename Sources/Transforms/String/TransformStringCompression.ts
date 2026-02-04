@@ -174,8 +174,13 @@ export default {
                     const fourthStatementExpressionLeftNameBindingParent =
                         parentScope.getBinding(fourthStatementExpressionLeftName);
 
+                    if (!fourthStatementExpressionLeftNameBindingParent)
+                        return;
+
                     const { referencePaths: fourthStatementExpressionLeftNameBindingParentReferencePaths } =
                         fourthStatementExpressionLeftNameBindingParent;
+
+                    let replacedCalls = 0;
 
                     fourthStatementExpressionLeftNameBindingParentReferencePaths
                         .forEach(path => {
@@ -194,6 +199,7 @@ export default {
                                     const stringValue = splittedStringValue[parentNodeArgumentValue];
 
                                     parentPath.replaceWith(t.valueToNode(stringValue));
+                                    replacedCalls++;
 
                                     { // Log
                                         console.log(`Replaced ${fourthStatementExpressionLeftName}(${parentNodeArgumentValue}) => "${stringValue}"`);
@@ -204,16 +210,19 @@ export default {
                                     context.targetCount++;
                         });
 
-                    if (isNotEstimate) {
+                    if (isNotEstimate && replacedCalls > 0) {
                         const fourthStatementExpressionLeftNameBinding =
                             scope.getBinding(fourthStatementExpressionLeftName);
 
-                        const { path: fourthStatementExpressionLeftNameBindingPath } =
-                            fourthStatementExpressionLeftNameBinding;
+                        if (fourthStatementExpressionLeftNameBinding &&
+                            fourthStatementExpressionLeftNameBinding.referencePaths.length === 0) {
+                            fourthStatementExpressionLeftNameBinding.path.remove();
 
-                        fourthStatementExpressionLeftNameBindingPath.remove();
-
-                        path.remove();
+                            if (path.parentPath.isExpressionStatement())
+                                path.parentPath.remove();
+                            else
+                                path.remove();
+                        }
                     }
                 },
             };
