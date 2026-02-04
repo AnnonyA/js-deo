@@ -86,29 +86,34 @@ export default {
 
                 return {
                     // PREDICATE() && test => test
+                    // PREDICATE() || test => test
                     LogicalExpression(path) {
                         const { node } = path;
 
-                        if (node.operator !== "&&") return;
-
                         const leftPath = path.get("left");
 
-                        if (isTruePredicate(leftPath))
-                            if (isNotEstimate) {
-                                const { right } = node;
+                        const shouldSimplify =
+                            (node.operator === "&&" && isTruePredicate(leftPath)) ||
+                            (node.operator === "||" && isFalsePredicate(leftPath));
 
-                                path.replaceWith(right);
+                        if (!shouldSimplify)
+                            return;
 
-                                { // Log
-                                    const { code: nodeCode } = generate(node);
-                                    const { code: nodeRightCode } = generate(right);
+                        if (isNotEstimate) {
+                            const { right } = node;
 
-                                    console.log(`Simplified opaque logical expression: "${nodeCode}" => "${nodeRightCode}"`);
-                                }
+                            path.replaceWith(right);
 
-                                context.targetCount--;
-                            } else
-                                context.targetCount++;
+                            { // Log
+                                const { code: nodeCode } = generate(node);
+                                const { code: nodeRightCode } = generate(right);
+
+                                console.log(`Simplified opaque logical expression: "${nodeCode}" => "${nodeRightCode}"`);
+                            }
+
+                            context.targetCount--;
+                        } else
+                            context.targetCount++;
                     },
 
                     // if (PREDICATE()) { return real; } else { return fake; } => return real;
@@ -131,6 +136,50 @@ export default {
 
                                     console.log(`Simplified opaque if: "${innerTestCode}" => true`);
                                 }
+
+                                context.targetCount--;
+                            } else
+                                context.targetCount++;
+
+                        if (isFalsePredicate(testPath))
+                            if (isNotEstimate) {
+                                const { alternate, test: innerTest } = node;
+
+                                if (alternate) {
+                                    if (t.isBlockStatement(alternate))
+                                        path.replaceWithMultiple(alternate.body);
+                                    else
+                                        path.replaceWith(alternate);
+                                } else
+                                    path.remove();
+
+                                { // Log
+                                    const { code: innerTestCode } = generate(innerTest);
+
+                                    console.log(`Simplified opaque if: "${innerTestCode}" => false`);
+                                }
+
+                                context.targetCount--;
+                            } else
+                                context.targetCount++;
+                    },
+
+                    ConditionalExpression(path) {
+                        const { node } = path;
+
+                        const testPath = path.get("test");
+
+                        if (isTruePredicate(testPath))
+                            if (isNotEstimate) {
+                                path.replaceWith(node.consequent);
+
+                                context.targetCount--;
+                            } else
+                                context.targetCount++;
+
+                        if (isFalsePredicate(testPath))
+                            if (isNotEstimate) {
+                                path.replaceWith(node.alternate);
 
                                 context.targetCount--;
                             } else
