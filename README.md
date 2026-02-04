@@ -4,7 +4,7 @@
 
 Currently supported presets:
 - [x] low
-- [ ] medium
+- [x] medium
 - [ ] high
 
 ## Setup and Usage
@@ -48,3 +48,4 @@ npx tsx Sources/index.ts
 ## Limitations
 
 * **Nested CFF:** Supported via recursive re-traversal of reconstructed blocks, with depth/step guards to avoid infinite loops.
+* **Identifier renaming:** `renameVariables` / `renameGlobals` are irreversible, so randomized names may remain in medium/high outputs.
